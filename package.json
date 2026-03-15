@@ -1,0 +1,37 @@
+{
+  "name": "dotmd-cli",
+  "version": "0.1.0",
+  "description": "Zero-dependency CLI for managing markdown documents with YAML frontmatter — index, query, validate, lifecycle.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "dotmd": "bin/dotmd.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "dotmd.config.example.mjs"
+  ],
+  "keywords": [
+    "markdown",
+    "frontmatter",
+    "cli",
+    "docs",
+    "plans",
+    "adr",
+    "rfc",
+    "document-management",
+    "yaml"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beyond-dev/platform.git",
+    "directory": "packages/dotmd"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
