@@ -31,6 +31,9 @@
     "url": "git+https://github.com/beyond-dev/platform.git",
     "directory": "packages/dotmd"
   },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
   "engines": {
     "node": ">=18"
   }
