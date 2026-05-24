@@ -1,8 +1,8 @@
 ---
 type: prompt
-status: pending
+status: archived
 created: 2026-05-24T20:08:24Z
-updated: 2026-05-24T20:08:24Z
+updated: 2026-05-24T20:14:15Z
 dotmd_version: 0.31.4
 context: "Resume Gmax Enhancements"
 related_plans:
