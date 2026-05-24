@@ -2,9 +2,15 @@
 
 <!-- GENERATED:dotmd:start -->
 
+## Active
+
+| Doc | Status Snapshot |
+|-----|-----------------|
+| [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active: No current_state set |
+
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 2 recent or high-signal highlights out of 5 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 2 recent or high-signal highlights out of 6 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|
