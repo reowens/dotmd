@@ -34,7 +34,7 @@ The dotmd repo was init'd against its own CLI for the first time on 2026-05-23. 
 
 8. **`dotmd briefing` reports `Errors: 1` with no detail** — user must know to run `dotmd check` separately to see what the error is. Suggest: `Errors: 1 (run \`dotmd check\` to see)`.
 
-9. **`pickup`'s `Related:` resolver shows sibling plan as `(missing)`** even though `related_plans: - fix-stale-next-command-in-generated-slash-cmds.md` references a file in the same directory. Likely needs same-dir filename resolution (or full paths). Related to finding 2.
+9. ~~**`pickup`'s `Related:` resolver shows sibling plan as `(missing)`**~~ **fixed.** Pickup-card was using `resolveDocPath`, which only tries repo-root and docsRoots-relative — never doc-relative. So a bare basename like `sibling.md` in `docs/plans/foo.md`'s `related_plans:` always rendered `(missing)`, even though graph and validate resolved the same ref fine via `resolveRefPath` (doc-relative → repo-relative). Switched `readRelatedSummary` to `resolveRefPath(refStr, docDir, repoRoot) ?? resolveDocPath(refStr, config)` so doc-relative wins, with docsRoots kept as a final fallback for legacy/typed refs. Regression test in `test/pickup-card.test.mjs` ('resolves same-dir related_plans basename refs'). End-to-end verified on a fresh repo: bare-basename ref now renders `↔ docs/plans/sibling.md (active)` instead of `(missing)`.
 
 10. **`dotmd doctor` numbered steps are `1, 2, 3, 4, 6`** — `5.` is skipped. Cosmetic but visible.
 
