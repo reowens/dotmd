@@ -18,7 +18,7 @@ The dotmd repo was init'd against its own CLI for the first time on 2026-05-23. 
 
 ## Findings
 
-1. **Plan template writes `surfaces:`/`modules:` (plural) but `stats`/`coverage` read `surface`/`module` (singular).** `dotmd list --json` shows both fields side by side: `"surface": null` AND `"surfaces": ["cli"]`. The tool writes data its own readers ignore. Pick one name and fix the other side. **Highest leverage** — affects findings 2, 9 transitively.
+1. ~~**Plan template writes `surfaces:`/`modules:` (plural) but `stats`/`coverage` read `surface`/`module` (singular).**~~ **fixed.** `src/index.mjs:162-164` already merges singular into the plural array — that's the canonical form. Updated the four readers that still consulted the singular field: `stats.mjs` (hasSurface/hasModule), `validate.mjs` (module-required check), `render.mjs` (coverage), `export.mjs` (md + html). `graph.mjs` JSON now emits both. Regression tests in `test/stats.test.mjs` and `test/render.test.mjs` cover plural-only docs.
 
 2. **Default `init` config has no `referenceFields`** but the default plan template scaffolds `related_plans:`, `related_docs:`, `parent_plan:` frontmatter. Result: `graph`, `deps`, `unblocks`, and `pickup`'s `Related:` resolver are all dead on arrival until the user manually configures `referenceFields`. Fix: ship sensible defaults in `init` config.
 
