@@ -12,7 +12,7 @@ domain:
 audience: internal
 parent_plan:
 related_plans:
-  - ../plans/fix-init-silent-claude-commands-rewrite.md
+  - fix-init-silent-claude-commands-rewrite.md
 related_docs:
 current_state: Discovered during dogfood audit on 2026-05-23 — the regenerated `.claude/commands/plans.md` (v0.31.0) lists `dotmd next` as a real command, but it doesn't exist (`Unknown command: next. Did you mean dotmd new?`).
 next_step: Find the template/template-string in `src/init.mjs` (or wherever .claude/commands content is generated) and either remove `dotmd next` or replace with `dotmd plans --status active`.

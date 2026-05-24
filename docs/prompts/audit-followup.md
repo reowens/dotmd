@@ -6,7 +6,7 @@ updated: 2026-05-24T03:25:00Z
 dotmd_version: 0.31.0
 context: "Audit Followup"
 related_plans:
-  - ../plans/fix-init-silent-claude-commands-rewrite.md
+  - ../archived/fix-init-silent-claude-commands-rewrite.md
   - ../archived/fix-stale-next-command-in-generated-slash-cmds.md
 ---
 
@@ -30,10 +30,12 @@ The dotmd repo was init'd against its own CLI for the first time on 2026-05-23. 
 
 6. ~~**Generated `.claude/commands/plans.md` references `dotmd next`**~~ **fixed.** Replaced `dotmd next` with `dotmd actionable` in `src/claude-commands.mjs` (the closest real preset — filters to `status: active,ready` AND `has-next-step`, exactly the original "ready plans with next steps (what to promote)" intent). Extracted `KNOWN_COMMANDS` from `bin/dotmd.mjs` into `src/commands.mjs` so the bin's unknown-command suggester and the new regression test share one source of truth. Regression test in `test/claude-commands.test.mjs` parses every backtick `dotmd <verb>` from both generated templates and asserts each verb is in `KNOWN_COMMANDS` — prevents future template drift. Scaffolded plan `fix-stale-next-command-in-generated-slash-cmds.md` archived.
 
-7. **`dotmd init` silently regenerates `.claude/commands/{plans,docs}.md`** — both dry-run and real-run output omit them entirely; the user sees nothing about the slash-command files even when they change. Scaffolded as `docs/plans/fix-init-silent-claude-commands-rewrite.md`.
+7. ~~**`dotmd init` silently regenerates `.claude/commands/{plans,docs}.md`**~~ **fixed.** Investigation surfaced a worse companion bug: `runInit` took no `dryRun` param at all — `dotmd init -n` ignored the flag and actually wrote everything. Fixed both: `runInit` now accepts and threads `{ dryRun }`, every `writeFileSync` / `mkdirSync` is gated, every output line is prefixed `[dry-run]` when previewing. `scaffoldClaudeCommands` accepts `{ dryRun }` too. The init report loop now handles all four slash-command outcomes (`created`/`updated`/`current`/`skipped`) instead of just two — refreshing from an older banner now prints `update .claude/commands/X (vA → vB)` and user-managed (no-marker) files now print `skip .claude/commands/X (no version marker — user-managed)`. Three regression tests in `test/init.test.mjs`. Scaffolded plan `fix-init-silent-claude-commands-rewrite.md` archived.
 
 8. **`dotmd briefing` reports `Errors: 1` with no detail** — user must know to run `dotmd check` separately to see what the error is. Suggest: `Errors: 1 (run \`dotmd check\` to see)`.
 
 9. **`pickup`'s `Related:` resolver shows sibling plan as `(missing)`** even though `related_plans: - fix-stale-next-command-in-generated-slash-cmds.md` references a file in the same directory. Likely needs same-dir filename resolution (or full paths). Related to finding 2.
 
 10. **`dotmd doctor` numbered steps are `1, 2, 3, 4, 6`** — `5.` is skipped. Cosmetic but visible.
+
+11. **Fresh `dotmd init` skips slash-command scaffolding when there's no pre-existing config.** Discovered while fixing finding 7. The dispatcher at `bin/dotmd.mjs` does `runInit(cwd, config.configFound ? config : null, ...)`. On a brand-new repo, `configFound` is false, so the `config` arg is `null`. `runInit` then gates the slash-command block on `if (config)` — false — so `.claude/commands/*` is never scaffolded on first init, only on a re-run after the config file already exists. Fix: re-resolve (or synthesize) the config inside `runInit` after the starter config has been written, then pass that to `scaffoldClaudeCommands`.
