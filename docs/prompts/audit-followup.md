@@ -34,7 +34,7 @@ The dotmd repo was init'd against its own CLI for the first time on 2026-05-23. 
 
 8. **`pickup` `Related:` resolver shows sibling plan as `(missing)`** even though `related_plans: - fix-stale-next-command-in-generated-slash-cmds.md` references a file in the same directory. Likely needs same-dir filename resolution (or full paths). Same root cause as #6.
 
-9. **`dotmd archive` fails on uncommitted files** — `fatal: not under version control, source=docs/plans/throwaway-lifecycle-test.md`. Uses `git mv` without fallback. Common workflow (scaffold → archive on second thought) is broken. Also leaves an empty `docs/archived/` dir behind after failure.
+9. ~~**`dotmd archive` fails on uncommitted files**~~ — **fixed.** `gitMv` in `src/git.mjs` now checks `git ls-files --error-unmatch` first and falls back to `fs.renameSync` when the source is untracked (or repoRoot isn't a git repo at all). Same fallback applies to `runStatus`'s archive/unarchive paths and to `dotmd rename`. Tests added in `test/git.test.mjs`. Empty-archive-dir-on-failure tail issue is unaddressed and not worth a follow-up unless it bites.
 
 10. **`dotmd prompts new` creates a file that immediately fails `check`** — missing `updated:`, missing `title`, missing `summary`. Either prompt template should populate those, or `check` should exempt `type: prompt` from those rules. Out-of-the-box, the tool's own outputs fail its own validators.
 
