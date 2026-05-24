@@ -6,8 +6,8 @@ updated: 2026-05-24T03:25:00Z
 dotmd_version: 0.31.0
 context: "Audit Followup"
 related_plans:
-  - fix-init-silent-claude-commands-rewrite.md
-  - fix-stale-next-command-in-generated-slash-cmds.md
+  - ../plans/fix-init-silent-claude-commands-rewrite.md
+  - ../plans/fix-stale-next-command-in-generated-slash-cmds.md
 ---
 
 # Dotmd self-dogfood audit — 2026-05-23
@@ -20,7 +20,7 @@ The dotmd repo was init'd against its own CLI for the first time on 2026-05-23. 
 
 1. ~~**Plan template writes `surfaces:`/`modules:` (plural) but `stats`/`coverage` read `surface`/`module` (singular).**~~ **fixed.** `src/index.mjs:162-164` already merges singular into the plural array — that's the canonical form. Updated the four readers that still consulted the singular field: `stats.mjs` (hasSurface/hasModule), `validate.mjs` (module-required check), `render.mjs` (coverage), `export.mjs` (md + html). `graph.mjs` JSON now emits both. Regression tests in `test/stats.test.mjs` and `test/render.test.mjs` cover plural-only docs.
 
-2. **Default `init` config has no `referenceFields`** but the default plan template scaffolds `related_plans:`, `related_docs:`, `parent_plan:` frontmatter. Result: `graph`, `deps`, `unblocks`, and `pickup`'s `Related:` resolver are all dead on arrival until the user manually configures `referenceFields`. Fix: ship sensible defaults in `init` config.
+2. ~~**Default `init` config has no `referenceFields`**~~ **fixed.** Added `referenceFields: { bidirectional: ['related_plans', 'related_docs'], unidirectional: ['parent_plan'] }` to both `DEFAULTS` in `src/config.mjs` (so any existing config without an explicit `referenceFields` block inherits the new defaults) and to `STARTER_CONFIG` in `src/init.mjs` (for discoverability — users see the wiring in their own config file). `graph` and `deps` now work out-of-box. Regression test in `test/init.test.mjs` asserts a fresh init produces a config where two cross-referencing plans produce a `related_plans` edge in `graph --json`. Note: `pickup`'s `Related:` resolver still says `(missing)` for same-dir siblings — that's finding 9, a separate same-dir resolution bug; refs across directories require relative paths (e.g. `../plans/foo.md`).
 
 3. **`dotmd prompts new` creates a file that immediately fails `check`** — missing `updated:`, missing `title`, missing `summary`. Three check failures the moment you save your first prompt. Either prompt template should populate those, or `check` should exempt `type: prompt`. Out-of-the-box, the tool's own outputs fail its own validators.
 
