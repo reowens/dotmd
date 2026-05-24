@@ -1,8 +1,8 @@
 ---
 type: prompt
-status: pending
+status: archived
 created: 2026-05-24T04:36:32Z
-updated: 2026-05-24T04:36:32Z
+updated: 2026-05-24T05:02:41Z
 dotmd_version: 0.31.1
 context: "Resume Audit Fixes"
 related_plans:
