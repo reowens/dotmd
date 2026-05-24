@@ -180,6 +180,75 @@ When the glossary fails to parse (see F5), `--list` produces identical output to
 
 **Proposed fix.** In `src/render.mjs` (check renderer), group warnings by category and collapse high-frequency auto-fixable ones into a count + remediation hint. Same treatment could help the `Both module/modules` category (F3) — even after the false-positive fix, a "9 plans have conflicting module/modules values (run `dotmd lint --fix`)" summary is friendlier than per-doc lines.
 
+### 14. Prompt lifecycle has no "shelved" state — pending conflates "next up" with "saved but parked". — P2
+
+Beyond has 2 pending prompts (`resume-dev-cockpit-open-items`, `resume-pitch-deck`) and 89 archived. The 2 pending are surfaced equally by `dotmd hud` and `dotmd briefing` — but the user described one as "what I want to use next" and the other as "saved but not reaching for it." Today the only way to express that distinction is to delete-and-rewrite or to live with both showing up at session start.
+
+Plans already have nine stop-statuses tied to distinct unstuck-actions (per CLAUDE.md's "status earns its keep" principle). Prompts have one (`pending`), which means the "next up" and "shelved" semantics collapse together.
+
+**Proposed fix.** Add `shelved` to the prompt type's default status vocab:
+- Visible to `dotmd prompts list` (so the user can see what's parked)
+- **Hidden** from `dotmd hud` and `dotmd briefing` pending-prompt surfaces
+- Excluded from `dotmd prompts next` (only consumes `pending`)
+- Activated via `dotmd status <prompt> pending` (or add `dotmd prompts shelve <file>` / `unshelve <file>` as sugar)
+
+Scope: status vocab update in `src/config.mjs` defaults; filter check in `src/doctor.mjs` (hud surface) and `src/briefing.mjs`; optional sugar commands. ~50 lines + 4 tests. No filing-by-directory required — `shelved` is just a frontmatter status flip.
+
+### 15. Generalize `archive: true` into a `filed: true` filing primitive. — P2
+
+dotmd's `archive: true` per-status flag conflates two orthogonal concepts: "this status is terminal" and "this status's docs live in a named subdirectory." The conflation works for `archived` (where both hold) but blocks a real organization win at scale.
+
+**Context.** Beyond has 222 non-archived plans flat in `docs/plans/`. The user originally chose against status-as-directory because cycling statuses (`active ↔ blocked ↔ awaiting ↔ in-session`) would generate constant renames + git noise. That reasoning still holds for cycling statuses. But *parked* statuses (`backlog`, `queued-after`, `partial`) don't cycle — filing them produces no churn and a real visual win.
+
+**Proposed fix.** Untangle the flags:
+- `filed: true` — new primitive. "On transition, move the doc into `<root>/<status-name>/`." Pure filing, nothing else.
+- `archive: true` — becomes sugar for `filed: true + terminal: true` (and continues to imply `quiet: true` via its existing behavior). Zero breakage for existing configs — derives `filed: true` automatically.
+- `archiveDir` config option — now only an override for the `archive` sugar (lets users rename the dir to `trash`/`done`/etc.). Other filed statuses use the status name verbatim — no separate config to keep in sync.
+
+A user opts in per-status: setting `backlog: { filed: true }` files new backlog plans into `docs/plans/backlog/` on transition. `active`, `blocked`, `awaiting`, `in-session` stay un-filed (no cycling churn).
+
+**Moving parts.** Most already exist for `archived/`:
+- `mkdir` on first transition — same path as the archive case, just keyed off `filed` instead of hardcoded.
+- `liveTypeDirsForRoots` in `src/validate.mjs` — needs to learn that any `filed: true` dir is a bucket dir (not a "drift" location). ~10 lines.
+- `updateRefsFromMovedFile` (F1 fix landed) — already handles cross-dir moves correctly.
+- `dotmd init` — no change; dirs created lazily on first use.
+- `dotmd migrate --by-status` (new, optional) — one-shot for existing files when the user flips `filed: true` on a populated repo. Without it, existing files drift until naturally transitioned.
+
+Scope: ~80 lines + tests for the core; ~50 for the migration command. The hardest decision isn't code — it's deciding which statuses opt in and living with that choice.
+
+### 16. No per-module digest view — at scale, users drown in flat plan lists with no triage ladder. — P1 (feature, not a defect)
+
+Beyond has 222 non-archived plans across ~54 modules. The user's direct framing: *"The number of plans is drowning me … to be able to go through them systematically and clean up AND to see what is most-likely stale and needs review without having to go into the file tree would be nice."*
+
+dotmd already has every primitive needed — `--module` filter, staleness, status breakdown, has-next-step, ages — but no command *composes* them into a module dashboard. `dotmd stats` is global. `dotmd query --module foo` is one-module flat. `dotmd health` is global by status. None answer "which modules are drowning, which are stale, which need triage today."
+
+**Proposed fix.** Three additive commands, view-only (no schema change, no churn):
+
+1. **`dotmd modules`** — top-level dashboard table. One row per module:
+
+   ```
+   Module           Total  Active  Planned  Blocked  Partial  Research  Stale  AvgAge  Oldest         NextStep%
+   foyer               18       4        8        3        2         1      3     23d  callbox 33d         72%
+   identity            14       5        4        1        2         2      2     12d  id-verify 60d       64%
+   atlas                9       1        5        1        0         2      1     31d  trip-plan 60d       55%
+   …
+   [no module]         47       9       18        4        5         3     12     28d  …                   42%
+   ```
+
+   Sort flags: `--sort total|stale|age|count` (default: `total` desc). `--json` for tooling. Empty/no-module bucket always surfaced so unowned plans don't hide.
+
+2. **`dotmd module <name>`** — single-module deep view, grouped by status, stale plans flagged, next-step inline. Essentially `dotmd plans --module foo` but richer + grouped + stale-aware. Mirror of how `dotmd focus <status>` deepens `dotmd plans --status foo`.
+
+3. **`dotmd stale --by module`** — group the existing stale list by module instead of flat-by-date. Same dataset, different bucketing.
+
+**The cleanup-ladder angle.** Add `--cleanup-rank` to `dotmd modules` that sorts by `(stale_count × avg_age_days) / total_plans` — surfaces the modules most overdue for a triage pass. The workflow becomes: `dotmd modules --cleanup-rank` → walk down the table → `dotmd module <name>` on the top hit → triage/archive → next. Systematic cleanup flow without ever opening the file tree.
+
+**Tradeoff.** Pure additive — no behavior change to any existing command, no schema, no migration. Risk is render shape (default to wide table at `display.lineWidth: 120`; provide stacked fallback for narrower terminals). Fully independent of F14 (shelved) and F15 (filed) — ships without either.
+
+**Scope.** ~150 lines + tests across `src/modules.mjs` (new), small additions in `src/stale.mjs` for `--by module`, `bin/dotmd.mjs` for the new verbs. ~6 tests (modules table, modules --sort, modules --cleanup-rank, module deep view, stale --by module, JSON shape).
+
+**Why P1 despite being a feature.** The user's pain is acute — 222 plans flat with no triage path is a workflow blocker, not a polish item. Likely the highest-ROI item in the audit for day-to-day use at Beyond's scale, and probably for any dotmd user who crosses ~50 active plans.
+
 ## Out-of-scope observations
 
 - **Beyond's own data hygiene** is not dotmd's bug, but worth noting: 32 docs have `surface:` values that are file paths or globs (e.g. `scripts/dev.sh`, `docs/plans/**`) — these are stretching the taxonomy into a notes field. Would be useful for dotmd to detect "looks like a path, not a taxonomy token" and suggest `notes:` instead. (Not pursuing — too project-specific to merit a default rule.)
@@ -193,3 +262,8 @@ F1, F2, F3 first — they're correctness bugs, not just polish. F1 makes `graph`
 F4 next — doctor's mutation safety is a footgun every audit so far has documented in a different shape (the gmax brownfield audit's recommendations also leaned this direction).
 
 F5–F13 are polish; F5 + F6 have the highest "first encounter" cost for new users with custom configs; F11 helps every multi-instance user (which is *all* of them eventually).
+
+F14, F15, F16 emerged from post-audit discussion of how to handle prompt + plan organization at Beyond's scale (222 non-archived plans, 91 archived prompts, ~54 modules). They're feature additions, not bug fixes:
+- **F16** is highest-ROI for day-to-day — pure additive, no churn risk, immediately solves a workflow blocker. Do this first.
+- **F14** is cheap and scoped — bundle with F16 or land standalone.
+- **F15** is load-bearing — worth scoping a plan + `/tmp/` spike before committing because it touches filesystem layout. Hold for last in the F14-F16 cluster.
