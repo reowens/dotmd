@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: archived
 created: 2026-05-24T03:17:26Z
-updated: 2026-05-24T03:17:26Z
+updated: 2026-05-24T04:24:44Z
 surfaces:
   - cli
 modules:
@@ -12,12 +12,11 @@ domain:
 audience: internal
 parent_plan:
 related_plans:
-  - fix-init-silent-claude-commands-rewrite.md
+  - ../plans/fix-init-silent-claude-commands-rewrite.md
 related_docs:
 current_state: Discovered during dogfood audit on 2026-05-23 — the regenerated `.claude/commands/plans.md` (v0.31.0) lists `dotmd next` as a real command, but it doesn't exist (`Unknown command: next. Did you mean dotmd new?`).
 next_step: Find the template/template-string in `src/init.mjs` (or wherever .claude/commands content is generated) and either remove `dotmd next` or replace with `dotmd plans --status active`.
 ---
-
 # Fix Stale `next` Command In Generated Slash Commands
 
 > Generated slash-command docs reference a command that doesn't exist, sending agents down a dead end.
@@ -87,6 +86,7 @@ The likely intent: `dotmd plans --status active` or `dotmd query --type plan --h
 
 ## Version History
 
+- **2026-05-24T04:24:44Z** Archived.
 - **2026-05-24T03:17:26Z** Created during dogfood audit.
 
 ## Closeout

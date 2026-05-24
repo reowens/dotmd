@@ -12,7 +12,7 @@ domain:
 audience: internal
 parent_plan:
 related_plans:
-  - fix-stale-next-command-in-generated-slash-cmds.md
+  - ../archived/fix-stale-next-command-in-generated-slash-cmds.md
 related_docs:
 current_state: Discovered during dogfood audit on 2026-05-23 — `dotmd init` silently regenerates `.claude/commands/{plans,docs}.md` from older versions but reports nothing in its create/update/exists output, and dry-run omits them entirely.
 next_step: Decide whether the regenerate behavior is intentional or a leak from `doctor`; if intentional, surface it in init output and dry-run.

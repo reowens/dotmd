@@ -7,7 +7,7 @@ dotmd_version: 0.31.0
 context: "Audit Followup"
 related_plans:
   - ../plans/fix-init-silent-claude-commands-rewrite.md
-  - ../plans/fix-stale-next-command-in-generated-slash-cmds.md
+  - ../archived/fix-stale-next-command-in-generated-slash-cmds.md
 ---
 
 # Dotmd self-dogfood audit — 2026-05-23
@@ -28,7 +28,7 @@ The dotmd repo was init'd against its own CLI for the first time on 2026-05-23. 
 
 5. ~~**`dotmd archive` fails on uncommitted files**~~ — **fixed in 54f8ba9.** `gitMv` in `src/git.mjs` now checks `git ls-files --error-unmatch` and falls back to `fs.renameSync` when the source is untracked (or repoRoot isn't a git repo). Same fallback applies to `runStatus`'s archive/unarchive paths and to `dotmd rename`. Tests added in `test/git.test.mjs`. The empty `docs/archived/` dir left behind on other failure modes is unaddressed and not worth a follow-up unless it bites.
 
-6. **Generated `.claude/commands/plans.md` references `dotmd next`** which doesn't exist (`Unknown command: next. Did you mean dotmd new?`). The slash command doc actively misleads agents. Scaffolded as `docs/plans/fix-stale-next-command-in-generated-slash-cmds.md`.
+6. ~~**Generated `.claude/commands/plans.md` references `dotmd next`**~~ **fixed.** Replaced `dotmd next` with `dotmd actionable` in `src/claude-commands.mjs` (the closest real preset — filters to `status: active,ready` AND `has-next-step`, exactly the original "ready plans with next steps (what to promote)" intent). Extracted `KNOWN_COMMANDS` from `bin/dotmd.mjs` into `src/commands.mjs` so the bin's unknown-command suggester and the new regression test share one source of truth. Regression test in `test/claude-commands.test.mjs` parses every backtick `dotmd <verb>` from both generated templates and asserts each verb is in `KNOWN_COMMANDS` — prevents future template drift. Scaffolded plan `fix-stale-next-command-in-generated-slash-cmds.md` archived.
 
 7. **`dotmd init` silently regenerates `.claude/commands/{plans,docs}.md`** — both dry-run and real-run output omit them entirely; the user sees nothing about the slash-command files even when they change. Scaffolded as `docs/plans/fix-init-silent-claude-commands-rewrite.md`.
 
