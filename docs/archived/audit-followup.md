@@ -1,15 +1,14 @@
 ---
 type: prompt
-status: pending
+status: archived
 created: 2026-05-24T03:19:45Z
-updated: 2026-05-24T03:25:00Z
+updated: 2026-05-24T20:07:34Z
 dotmd_version: 0.31.0
 context: "Audit Followup"
 related_plans:
-  - ../archived/fix-init-silent-claude-commands-rewrite.md
-  - ../archived/fix-stale-next-command-in-generated-slash-cmds.md
+  - fix-init-silent-claude-commands-rewrite.md
+  - fix-stale-next-command-in-generated-slash-cmds.md
 ---
-
 # Dotmd self-dogfood audit — 2026-05-23
 
 > Triage the 10 findings below into per-fix plans before tackling the rest. Listed in suggested fix order (most-leveraged first). Two are already scaffolded under `docs/plans/`; one is already fixed.
