@@ -1,14 +1,14 @@
 ---
 type: plan
-status: awaiting
+status: archived
 created: 2026-05-25T21:54:38Z
-updated: 2026-05-25T22:09:23Z
+updated: 2026-05-25T22:13:16Z
 surfaces: [cli, slash-commands]
 modules: [hud, slash-commands]
 domain: agent-ux
 audience: internal
 parent_plan:
-related_plans: baton-slash-command.md
+related_plans: ../archived/baton-slash-command-20260525T221316Z.md
 related_docs:
 current_state: Phases 1+2 shipped. `refreshStaleSlashCommands` helper added, wired into `runHud`, dogfooded against this repo (v0.31.4 → v0.32.1 refresh fired). Tests green (813/813, +4 new).
 next_step: Execute Phase 3 — bundle with `/baton` as 0.33.0 via `npm version minor`.
@@ -93,6 +93,7 @@ Bundle into 0.33.0 with `[[baton-slash-command]]`. CHANGELOG entry: "`/baton` sl
 
 ## Version History
 
+- **2026-05-25T22:13:16Z** Archived.
 - **2026-05-25T22:09:23Z** Status: in-session → awaiting.
 - **2026-05-25T22:10:00Z** Phases 1+2 shipped. Helper + hud wiring + 4 tests; suite 813/813 green; dogfood refresh succeeded on this repo (v0.31.4 → v0.32.1). Phase 3 (release) ready to execute as 0.33.0 bundled with `[[baton-slash-command]]`.
 - **2026-05-25T22:06:05Z** Picked up (active → in-session).

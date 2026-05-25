@@ -1,8 +1,8 @@
 ---
 type: plan
-status: awaiting
+status: archived
 created: 2026-05-24T22:39:43Z
-updated: 2026-05-25T21:26:52Z
+updated: 2026-05-25T22:13:16Z
 surfaces: [cli, slash-commands]
 modules: [init, slash-commands]
 domain: agent-ux
@@ -86,6 +86,7 @@ Bundle into 0.33.0 alongside `modules-dashboard.md` and agent-UX A1/A2/A3 if lan
 
 ## Version History
 
+- **2026-05-25T22:13:16Z** Archived.
 - **2026-05-25T21:26:52Z** Status: in-session → awaiting.
 - **2026-05-25T21:22:38Z** Phases 1+2 shipped. `generateBatonCommand()` in `src/claude-commands.mjs` (~13-line body, references only KNOWN_COMMANDS verbs: `plans`, `status`, `archive`, `new`, `release`, `hud`); registered in scaffolder + checker. New init test + updated existing claude-commands tests. 809/809 green. Phase 3 (release) deferred pending bundle-vs-standalone decision.
 - **2026-05-25T21:22:38Z** Picked up (planned → in-session).
