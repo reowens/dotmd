@@ -1,8 +1,8 @@
 ---
 type: prompt
-status: pending
+status: archived
 created: 2026-05-25T22:21:40Z
-updated: 2026-05-25T22:21:40Z
+updated: 2026-05-25T22:30:20Z
 dotmd_version: 0.33.0
 context: "Resume Agent Ux A1 A3"
 related_plans:

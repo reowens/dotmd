@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: archived
 created: 2026-05-25T22:19:27Z
-updated: 2026-05-25T22:19:27Z
+updated: 2026-05-25T22:45:54Z
 surfaces: [cli]
 modules: [index, lifecycle, validate]
 domain: agent-ux
@@ -60,7 +60,7 @@ Every recovery for an agent is a tool round-trip, not a keystroke — the cost m
 
 ## Phases
 
-### Phase 1 — A1: `dotmd index` writes by default ⬜
+### Phase 1 — A1: `dotmd index` writes by default ✅
 
 - In `bin/dotmd.mjs` index dispatch (or `src/index.mjs` runner — wherever the `--write` branch lives), flip the default. Move stdout-print behind a new `--print` flag.
 - Update `runCheck`'s stale-index error message (find `Run \`dotmd index\`` in `src/check.mjs` or wherever it's emitted) to drop the no-op suggestion — the new default is correct.
@@ -69,7 +69,7 @@ Every recovery for an agent is a tool round-trip, not a keystroke — the cost m
 - Add one test: `dotmd index` (no flag) updates the index file and emits a confirmation line (mirror the existing `Updated /path/docs.md` line).
 - ~15 LOC + test sweep. Touches CHANGELOG with a migration note.
 
-### Phase 2 — A2: `dotmd new plan` accepts body ⬜
+### Phase 2 — A2: `dotmd new plan` accepts body ✅
 
 - In the built-in plan template (probably `src/templates.mjs` or wherever `acceptsBody` is set per-template), set `acceptsBody: true`.
 - In the scaffolder that lands the body, insert it under the `## Problem` heading (D2). Mirror the `## Overview` insertion logic that `doc` uses; section name is the only difference.
@@ -79,7 +79,7 @@ Every recovery for an agent is a tool round-trip, not a keystroke — the cost m
   2. The scaffolded frontmatter and outline below `## Problem` are preserved verbatim.
 - ~30 LOC + 2 tests.
 
-### Phase 3 — A3: ref/glossary/module suggestion hints ⬜
+### Phase 3 — A3: ref/glossary/module suggestion hints ✅
 
 - Add a `suggestCandidates(query, candidates, max=3)` helper in `src/util.mjs` or `src/validate.mjs`. Substring match first, Levenshtein distance ≤ 3 second, dedup, top-N.
 - Wire into `src/validate.mjs` ref-resolution errors: when a ref doesn't resolve, pass the index's basename list as candidates and append `Did you mean: ...?` to the error.
@@ -88,7 +88,7 @@ Every recovery for an agent is a tool round-trip, not a keystroke — the cost m
 - Add tests in `test/validate.test.mjs` (or wherever): unresolved ref gets a suggestion; unrelated typo (no close match) gets no suggestion line; same-type filtering works.
 - ~40 LOC + 3 tests.
 
-### Phase 4 — Release ⬜
+### Phase 4 — Release ✅
 
 - CHANGELOG entry covering all three findings. Call out the A1 breaking change explicitly: `dotmd index` now writes by default; use `--print` to preserve the old stdout-only behavior.
 - `npm version minor` → 0.34.0. The standard automated chain handles tagging, push, publish, local reinstall.
@@ -102,8 +102,19 @@ Every recovery for an agent is a tool round-trip, not a keystroke — the cost m
 
 ## Version History
 
+- **2026-05-25T22:45:54Z** Archived.
+- **2026-05-25** Shipped as 0.34.0. All three phases landed: A1 (index write-by-default + `--print`), A2 (plan accepts body under `## Problem`), A3 (suggestion hints across refs/glossary/module-filter). Full test suite green (831 tests).
+- **2026-05-25T22:30:24Z** Picked up (active → in-session).
 - **2026-05-25T22:19:27Z** Created. Spec lives in `[[agent-ux-audit]]`; this plan sequences A1+A2+A3 into one 0.34.0 minor release per the audit's own recommendation.
 
 ## Closeout
 
-<!-- Filled on archive: what shipped, key commits, deferrals dispositioned. -->
+Shipped as 0.34.0 — three audit findings bundled into one minor.
+
+- **A1.** `dotmd index` flipped to write-by-default; `--print` added for the old stdout-only behavior; `--write` kept as a silent no-op for script back-compat. Stale-index error message in `src/index-file.mjs` is now self-consistent (the suggestion command actually fixes the error). Lifecycle warning at `src/lifecycle.mjs:38` updated to drop `--write`. Help text, README, and tests in `test/index-file.test.mjs` swept.
+- **A2.** Built-in `plan` template in `src/new.mjs` opted into `acceptsBody: true`; body lands under `## Problem` (D2). The two tests that previously asserted plan REJECTS body were flipped to assert it now accepts body (under `## Problem`); added a counter-test that custom plan templates opting out still get the fail-fast error.
+- **A3.** New `suggestCandidates(query, candidates, max=3)` in `src/util.mjs` — substring-first, Levenshtein-≤3 second. Wired into three sites: ref-resolution errors in `src/validate.mjs` (via new `enrichRefErrorSuggestions` post-pass called from `buildIndex`, structured `meta` on ref errors for the post-pass to find them, and `inferRefFieldType` for field-typed candidate filtering); glossary no-match in `src/glossary.mjs:219`; unknown `--module` values in `src/query.mjs` (new `writeUnknownFilterValueHint` only fires when the value doesn't exist in the index, so combination misses are silent).
+
+Deferrals dispositioned: A4 (per-field unidirectional refs) stays in `[[agent-ux-audit]]` § A4 — needs a config-schema decision (per-field config vs. per-ref `>` prefix); spin into its own plan when revisited. A5 disappeared with A2 as predicted. The Meta-pattern sweep stays open as a follow-up plan after this lands.
+
+The Open Question on A3 ranking ("filter by ref-field type") was settled at implementation time per the plan's recommended default ("same type if known, else any"), tightened slightly: untyped docs (no explicit frontmatter `type:`) are kept as candidates when filtering by type, since we can't prove they aren't the target.
