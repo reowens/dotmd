@@ -2,7 +2,7 @@
 type: plan
 status: active
 created: 2026-05-24T22:22:49Z
-updated: 2026-05-24T22:22:49Z
+updated: 2026-05-25
 surfaces: [cli]
 modules: [modules, query]
 domain: cli-ux

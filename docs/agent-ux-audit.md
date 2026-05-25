@@ -2,7 +2,7 @@
 type: doc
 status: active
 created: 2026-05-24T22:33:02Z
-updated: 2026-05-24T22:33:02Z
+updated: 2026-05-25
 modules: [cli, validate, index, lifecycle]
 surfaces: [cli]
 domain: agent-ux
