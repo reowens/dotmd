@@ -6,11 +6,13 @@
 
 | Doc | Status Snapshot |
 |-----|-----------------|
+| [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Active: No current_state set |
 | [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active: No current_state set |
+| [Modules Dashboard (F16)](plans/modules-dashboard.md) | Active: Spec finalized; awaiting implementation. |
 
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 2 recent or high-signal highlights out of 7 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 2 recent or high-signal highlights out of 8 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|
