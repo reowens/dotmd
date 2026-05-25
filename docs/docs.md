@@ -8,6 +8,7 @@
 |-----|-----------------|
 | [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Active: No current_state set |
 | [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active: No current_state set |
+| [Agent UX fixes — A1, A2, A3](plans/agent-ux-a1-a3.md) | Active: Plan drafted. Spec lives in the audit doc; this plan sequences and bounds the work. |
 | [Modules Dashboard (F16)](plans/modules-dashboard.md) | Active: Spec finalized; awaiting implementation. |
 
 ## Archived
