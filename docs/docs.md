@@ -8,6 +8,7 @@
 |-----|-----------------|
 | [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Active: No current_state set |
 | [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active: No current_state set |
+| [A4 — per-field unidirectional refs](plans/a4-unidirectional-refs.md) | Active: Plan drafted. Design call settled — per-ref `>` prefix wins over per-field config. |
 | [Modules Dashboard (F16)](plans/modules-dashboard.md) | Active: Spec finalized; awaiting implementation. |
 
 ## Archived
