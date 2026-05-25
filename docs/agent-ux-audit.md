@@ -24,7 +24,7 @@ All five findings below were hit in a *single* plan-creation flow during routine
 
 ## Findings
 
-### A1. `dotmd check` prescribes a fix that doesn't fix. — P1 (footgun)
+### A1. `dotmd check` prescribes a fix that doesn't fix. — P1 (footgun) — ✅ shipped 0.34.0
 
 `dotmd check` reports `Generated index block is stale. Run \`dotmd index\`.` Running `dotmd index` (without flags) prints the new block to stdout and **does not update `docs/docs.md`**. The check continues to fail. The actual fix is `dotmd index --write`.
 
@@ -34,7 +34,7 @@ All five findings below were hit in a *single* plan-creation flow during routine
 
 **Recommendation: change the default.** `dotmd index --write` is what an agent almost always wants. The two callers I checked (`runCheck` error message + manual invocation) both want the write. Print-only is a debug/diagnostic mode, not the default action.
 
-### A2. `dotmd new plan` rejects body input, forcing whole-file rewrites. — P1 (common operation)
+### A2. `dotmd new plan` rejects body input, forcing whole-file rewrites. — P1 (common operation) — ✅ shipped 0.34.0
 
 `dotmd new doc <name> "body"` accepts body and lands it under `## Overview` (0.31.4 fix). `dotmd new plan <name>` doesn't. The error is prescriptive (`set acceptsBody: true on your custom plan template in dotmd.config.mjs`) but the resolution requires a config edit, not an inline body argument.
 
@@ -47,7 +47,7 @@ All five findings below were hit in a *single* plan-creation flow during routine
 
 **Note: `prompt` already accepts body** (`dotmd new prompt foo "..."` works). The asymmetry isn't justified.
 
-### A3. Ref-resolution errors don't suggest candidates. — P2 (cheap quality-of-life)
+### A3. Ref-resolution errors don't suggest candidates. — P2 (cheap quality-of-life) — ✅ shipped 0.34.0
 
 Wrote `related_docs: audit-beyond-platform.md` in a plan's frontmatter. `dotmd check` reported `does not resolve to an existing file` with no hint. The correct value (`docs/audit-beyond-platform.md`) was one index lookup away — every doc is in the index, and basename matching is cheap.
 
@@ -55,7 +55,7 @@ Wrote `related_docs: audit-beyond-platform.md` in a plan's frontmatter. `dotmd c
 
 **Proposed fix.** In `src/validate.mjs` ref-resolution errors (and lifecycle/graph by extension), when a ref doesn't resolve, append: `Did you mean: <top-3 basename or substring matches from the index>?` Use simple Levenshtein or basename-substring; ranking quality matters less than just surfacing candidates. The same fix applies to glossary lookups, `--module` filters on unknown modules, and `dotmd module <name>` (the F16 plan already specifies this hint shape for the new `module` verb — generalize).
 
-### A4. Bidirectional-reciprocity warning fires for upstream-parent refs. — P2 (noise that an agent can't cleanly fix)
+### A4. Bidirectional-reciprocity warning fires for upstream-parent refs. — P2 (noise that an agent can't cleanly fix) — 🟡 plan spawned (`docs/plans/a4-unidirectional-refs.md`, design call settled, targeting 0.35.0)
 
 When a plan adds `related_docs: docs/audit-beyond-platform.md` pointing at a parent audit doc, `dotmd check` warns: `references X in related_plans/related_docs, but that doc does not reference back`. To resolve, the agent must edit the parent doc to add a back-ref enumerating every spawned plan.
 
@@ -69,7 +69,7 @@ When a plan adds `related_docs: docs/audit-beyond-platform.md` pointing at a par
 
 The per-ref convention is more flexible and matches existing markdown-link semantics. Per-field is simpler and probably more useful in practice. Either fixes the noise.
 
-### A5. Two-step scaffold + `Write` loses template design (subsumed by A2). — P3
+### A5. Two-step scaffold + `Write` loses template design (subsumed by A2). — P3 — ✅ disappeared with A2 in 0.34.0
 
 The workaround for A2 (scaffold empty plan, then `Write` full file) discards the templated frontmatter. The agent must re-author every field, which:
 - Is brittle across dotmd versions (template adds a field, agent's hard-coded write doesn't include it, plan validates with missing fields).
@@ -112,8 +112,15 @@ Bundle A1 + A2 + A3 as the headline of 0.33.0 (with or without the audit-doc-dri
 
 A4 + A5 can defer; A4 needs a config schema decision and A5 disappears when A2 ships.
 
+## Post-ship update — 2026-05-25
+
+A1+A2+A3 shipped as 0.34.0 (not 0.33.0 — 0.33.0 was claimed by the `/baton` + slash-command self-heal pair). A5 disappeared with A2 as predicted. A4 graduated from "deferred" to its own active plan (`docs/plans/a4-unidirectional-refs.md`) with the config-schema design call settled in D1: per-ref `>` prefix wins over per-field config — keeps sibling cross-refs reciprocal while letting upstream-parent refs opt out per-ref. Targets 0.35.0.
+
+The Meta-pattern sweep below remains open as a separate follow-up.
+
 ## Version History
 
+- **2026-05-25** Post-ship update: A1+A2+A3 shipped as 0.34.0; A4 spawned as its own plan; A5 closed out by A2.
 - **2026-05-24T22:33:02Z** Created. Five findings from a single plan-creation flow during routine work; user reframed dotmd's primary audience as Claude (agents), making this audit class first-priority over data-corpus audits.
 
 ## Related Documentation

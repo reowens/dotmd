@@ -96,7 +96,7 @@ next_step: Pick up Phase 1 — parse the `>` prefix in `src/index.mjs:parseDocFi
 ## Deferred
 
 - Per-field-globally-unidirectional config opt-in. The `>` prefix covers the same use case more precisely; revisit only if a user requests it.
-- Generalizing the `>` prefix to body links (e.g. inside `[text](path.md)` syntax). Probably never wanted; markdown links are read-only references by nature, and bidirectional checks only run on frontmatter.
+- Generalizing the `>` prefix to body-link targets. Probably never wanted; markdown links are read-only references by nature, and bidirectional checks only run on frontmatter.
 - A3 follow-up (extend `Did you mean` to `dotmd status <file> <unknown-status>`) — same suggestion helper, new wire-up site. Trivial; could bundle into 0.35.0 if scope allows.
 - A2-template-overlap polish: `dotmd new plan <name> "<full-plan-body>"` leaves a duplicate scaffold below the inserted body (discovered drafting this very plan). Either detect/strip overlap, or document that A2's body insertion is for a SECTION'S worth of content, not a full plan.
 
