@@ -1,8 +1,8 @@
 ---
 type: plan
-status: in-session
+status: archived
 created: 2026-05-26T04:41:46Z
-updated: 2026-05-26T05:11:54Z
+updated: 2026-05-26T05:29:13Z
 surfaces:
 modules:
   - validate
@@ -159,3 +159,13 @@ Total: ~12 new tests. Total count: 886 → ~898.
 - existing infra: src/config.mjs:38-42 (prompt status vocab)
 - related: docs/archived/f4-f13-doctor-safety-check-collapse.md (shipped 0.37.0 — F13 collapse pattern that F11's warning will eventually feed into if it gets noisy at scale)
 - downstream: F17b (hud reads journal) — hold for ~1 week of real journal data after F17a ships
+
+## Closeout
+
+Shipped 2026-05-26 as 0.38.0 (commit `79675d6`). All three findings landed as planned, in the as-written phase order (F11 → F14 → F17a). Tests went 886 → 905 (target was ~898; F17a got 9 tests instead of the estimated 5 because rotation + concurrency atomicity each earned their own case). Smoke-tested against the installed binary in `/tmp/smoke-038` — F11 warning fires with both fix suggestions, F17a journal appends + reader displays cleanly, F14 shelve/unshelve flips status and `prompts next` skips correctly.
+
+Two minor decisions made during implementation:
+- Journal `err` strings are normalized to single-line and truncated at 200 chars before write (not just at render time). Keeps the JSONL file scan-able and prevents stack traces from bloating storage.
+- Journal config key (`journal: false`) added to DEFAULTS so users opting in via `export const journal = true` don't trip the "unknown config key" warning. The env var `DOTMD_JOURNAL` beats config — `DOTMD_JOURNAL=0` forces off even when config opts in.
+
+Next layer (F17b — hud reads journal) is intentionally deferred per the audit's "let real journal data shape the render" guidance. Re-evaluate around 2026-06-02.
