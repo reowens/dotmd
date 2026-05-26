@@ -11,7 +11,7 @@
 
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 20 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 21 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|
