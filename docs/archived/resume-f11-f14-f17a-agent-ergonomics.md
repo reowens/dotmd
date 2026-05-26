@@ -1,8 +1,8 @@
 ---
 type: prompt
-status: pending
+status: archived
 created: 2026-05-26T04:44:51Z
-updated: 2026-05-26T04:44:51Z
+updated: 2026-05-26T05:11:49Z
 dotmd_version: 0.37.0
 context: "Resume F11 F14 F17a Agent Ergonomics"
 related_plans:

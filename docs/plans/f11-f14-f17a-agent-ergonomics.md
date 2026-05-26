@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: in-session
 created: 2026-05-26T04:41:46Z
-updated: 2026-05-26T04:41:46Z
+updated: 2026-05-26T05:11:54Z
 surfaces:
 modules:
   - validate
