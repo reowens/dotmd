@@ -10,7 +10,7 @@ dotmd_version: 0.32.0
 
 > Third real-codebase audit (after self-dogfood and gmax-brownfield). Target: `/Users/reoiv/Development/beyond/platform` — 1,182 scanned docs across 8 roots, heavily customized config (custom statuses, per-status flags, surface taxonomy, excludeDirs). Read-only inspection only; one inadvertent doctor mutation reverted (finding 6 below explains the slip). Findings sorted P1 → P3 by impact, in suggested fix order.
 >
-> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2. F18 shipped in 0.36.3 (subsumes F3's mitigation with a universal singular-key deprecation). **Open:** F4, F6, F11, F13 (polish/safety). **Features for 0.37.0+:** F14 (`shelved` prompt status), F15 (`filed: true` filing primitive), F17 (agent-usage journal — added 2026-05-26 from post-audit discussion).
+> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2. F18 shipped in 0.36.3 (subsumes F3's mitigation with a universal singular-key deprecation). F4 + F13 shipped in 0.37.0 (doctor dry-run-default + bulk-fix-hint collapse on `check`). **Open:** F6, F11 (polish). **Features for 0.37.x+:** F14 (`shelved` prompt status), F15 (`filed: true` filing primitive), F17 (agent-usage journal — added 2026-05-26 from post-audit discussion).
 
 ## Verified impact (F1–F3, applied in this session)
 
@@ -339,7 +339,7 @@ F17 (added 2026-05-26) is observability for the agent fleet — not a bug fix, b
 | Release | Findings | Theme | Scope |
 |---|---|---|---|
 | **0.36.3** | F18 | Schema correctness | Deprecate singular `module:` / `surface:` keys; `dotmd lint --fix` migrates. Reader stays back-compat (no breakage). Patch bump. ~80 lines + 8 tests. **Shipped 2026-05-26.** |
-| **0.37.0** | F4 + F13 | Safety + check-noise reduction | doctor dry-run-default + collapse high-frequency `check` warnings into bulk-fix hints. Behavior change justifies minor bump. ~200 lines + tests. |
+| **0.37.0** | F4 + F13 | Safety + check-noise reduction | doctor dry-run-default + collapse high-frequency `check` warnings into bulk-fix hints. Behavior change justifies minor bump. ~200 lines + 15 tests. **Shipped 2026-05-26.** |
 | **0.37.x or 0.38.0** | F11 + F14 + F17a | Agent ergonomics | Lease-stale signal in validate, `shelved` prompt status, opt-in journal + reader. All additive. ~170 lines + tests. |
 | **0.38.x or 0.39.0** | F17b | Hud reads journal | Two new hud sections (previous-self, fleet) + recent-rejections summary. Ship after ~1 week of real journal data informs the render. ~60 lines + tests. |
 | **0.39.0** | F6 | Stats reshape | Type-keyed `countsByStatus` JSON shape. ~70 lines + tests. |
