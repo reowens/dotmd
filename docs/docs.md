@@ -8,14 +8,14 @@
 |-----|-----------------|
 | [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Active: No current_state set |
 | [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active: No current_state set |
-| [Modules Dashboard (F16)](plans/modules-dashboard.md) | Active: Spec finalized; awaiting implementation. |
 
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 6 recent or high-signal highlights out of 15 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 7 recent or high-signal highlights out of 16 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|
+| [Modules Dashboard (F16)](archived/modules-dashboard.md) | Archived: Phases 1-5 shipped. Tests green (844/844). CHANGELOG drafted for 0.36.0. |
 | [A4 — per-field unidirectional refs](archived/a4-unidirectional-refs.md) | Archived: Phases 1-3 shipped. Tests green (836/836). `dotmd check` warnings: 7 → 0. README + CHANGELOG drafted for 0.35.0. |
 | [Agent UX fixes — A1, A2, A3](archived/agent-ux-a1-a3.md) | Archived: Plan drafted. Spec lives in the audit doc; this plan sequences and bounds the work. |
 | [`/baton` slash command](archived/baton-slash-command-20260525T221316Z.md) | Archived: Phases 1+2 shipped — baton.md template + wiring landed in src/claude-commands.mjs; tests green (809/809). Awaiting Phase 3 release decision. |

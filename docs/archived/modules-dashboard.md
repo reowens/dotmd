@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: archived
 created: 2026-05-24T22:22:49Z
-updated: 2026-05-25
+updated: 2026-05-26T01:01:28Z
 surfaces: [cli]
 modules: [modules, query]
 domain: cli-ux
@@ -10,8 +10,8 @@ audience: internal
 parent_plan:
 related_plans:
 related_docs: "> docs/audit-beyond-platform.md"
-current_state: Spec finalized; awaiting implementation.
-next_step: Write `src/modules.mjs` + tests, wire dispatcher.
+current_state: Phases 1-5 shipped. Tests green (844/844). CHANGELOG drafted for 0.36.0.
+next_step: User confirms → `npm version minor` to cut 0.36.0.
 dotmd_version: 0.32.1
 ---
 
@@ -117,26 +117,26 @@ Plans grouped by status, ordered by `config.statusOrder`, stale flagged inline. 
 
 ## Phases
 
-### Phase 1 — `src/modules.mjs` + aggregation ⬜
+### Phase 1 — `src/modules.mjs` + aggregation ✅
 
 Single pass over `index.docs` filtered by type, building `Map<moduleName, { plans[], byStatus: Map, stale, oldest, nextStepCount }>`. Pure data; no render. ~80 lines.
 
-### Phase 2 — Dashboard render + sort modes ⬜
+### Phase 2 — Dashboard render + sort modes ✅
 
 Render the dashboard table with dynamic columns (M1), overflow fallback (M2), truncation indication. Sort modes: `total | stale | age | nextstep | cleanup`. ~50 lines.
 
-### Phase 3 — `dotmd module <name>` detail view ⬜
+### Phase 3 — `dotmd module <name>` detail view ✅
 
 Reuses `dotmd query --module <name> --group status` semantics, with inline stale flag + summary preview. ~30 lines.
 
-### Phase 4 — CLI wiring + completions ⬜
+### Phase 4 — CLI wiring + completions ✅
 
 - `src/commands.mjs` `KNOWN_COMMANDS` — add `'modules'`, `'module'`.
 - `bin/dotmd.mjs` — two dispatcher blocks, two HELP entries (long-form), one line in main HELP.
 - `src/completions.mjs` — verify auto-pickup from `KNOWN_COMMANDS`; add explicit entries if needed.
 - Help text for `dotmd stale` — add `--group module` example.
 
-### Phase 5 — Tests ⬜
+### Phase 5 — Tests ✅
 
 `test/modules.test.mjs`, 8 cases:
 
@@ -149,9 +149,9 @@ Reuses `dotmd query --module <name> --group status` semantics, with inline stale
 7. `dotmd module unknown-name` errors with "Available: …" hint.
 8. JSON shape stability: snapshot `{ modules: [...], type, sort, _totalUnique }`.
 
-### Phase 6 — Release ⬜
+### Phase 6 — Release ⏭
 
-Minor bump → **0.33.0**. CHANGELOG entry under `### Added`. Bundle F14 (`shelved` prompt status) if implemented in same session; both additive, neither blocks the other, single "scale triage" release reads cleanly. F15 stays separate (needs spike).
+Target version: **0.36.0** (plan body originally said 0.33.0, predates the 0.33–0.35 releases). Bundling F14 was conditional on same-session implementation — not done here, F14 stays separate. F15 also stays separate.
 
 ## Deferred
 
@@ -163,8 +163,15 @@ Minor bump → **0.33.0**. CHANGELOG entry under `### Added`. Bundle F14 (`shelv
 
 ## Version History
 
+- **2026-05-26T01:01:28Z** Archived.
+- **2026-05-26** Phases 1-5 shipped in 0.36.0. Archiving.
+- **2026-05-26T00:46:37Z** Picked up (active → in-session).
 - **2026-05-24T22:22:49Z** Created. Second-pass refinement of audit F16 spec.
 
 ## Closeout
 
-<!-- Filled on archive: what shipped, key commits, deferrals dispositioned. -->
+Shipped in 0.36.0. `src/modules.mjs` collapses Phases 1+2+3 into one file (aggregation + dashboard render + per-module detail) because they share the same data shape and renderers. Wired in `bin/dotmd.mjs` with a single dispatcher branch that handles both `modules` and `module <name>`, plus D3's default-`--type plan` narrowing applied at dispatch time (so the user opt-in `--type doc` route still works once the docs vocab settles). Eight tests in `test/modules.test.mjs` cover all the constraints called out in M1–M6 — dynamic columns, double-counting + `_totalUnique`, `(none)` bucket, stale flagging, statusOrder grouping, and JSON shape stability.
+
+Open Questions dispositioned: R1 (stacked-fallback fidelity) — implemented as a clean per-module block render, not "top-3 + others"; defer noise judgement to a future user report. R2 settled by design (no subcommands). R3 (cleanup formula) shipped with the v1 default `(stale × avgAge) / max(total, 1)`; documented in `dotmd modules --help` for visibility; iterate from real-corpus feedback.
+
+Deferrals preserved in the plan body for future pickup: `--by` alias, doc/prompt dashboard, `taxonomy.modules` config, `--unique` flag, formula tuning.
