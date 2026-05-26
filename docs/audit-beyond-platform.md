@@ -10,7 +10,7 @@ dotmd_version: 0.32.0
 
 > Third real-codebase audit (after self-dogfood and gmax-brownfield). Target: `/Users/reoiv/Development/beyond/platform` — 1,182 scanned docs across 8 roots, heavily customized config (custom statuses, per-status flags, surface taxonomy, excludeDirs). Read-only inspection only; one inadvertent doctor mutation reverted (finding 6 below explains the slip). Findings sorted P1 → P3 by impact, in suggested fix order.
 >
-> **Status (post-2026-05-24 same-session fixes):** F1, F2, F3 shipped in this session — see `## Verified impact` below. F4–F13 remain open and tracked in the `audit-beyond-fixes` prompt for the next session.
+> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2 (see `## 0.36.2 — verified impact` below). **Open:** F4, F6, F11, F13 (polish/safety). **Features for 0.37.0+:** F14 (`shelved` prompt status), F15 (`filed: true` filing primitive).
 
 ## Verified impact (F1–F3, applied in this session)
 
@@ -27,6 +27,21 @@ Measured against beyond/platform after the production fixes were applied (runnin
 | Test suite | 798 pass | 808 pass | +10 new tests |
 
 The 4 remaining "broken edges" and the 3 + 4 remaining "Both…divergent" warnings are **genuine** data issues in beyond (refs to truly-archived plans; surface/module values that genuinely differ between singular and plural) — not false positives.
+
+## 0.36.2 — verified impact (F5, F7, F8, F9, F10, F12)
+
+Polish bundle: six P2/P3 findings shipped as a single no-breakage patch release. All additive or pure-render — no JSON shape changes, no schema changes, no behavior breaks.
+
+| Finding | Surface | Fix |
+|---|---|---|
+| F5 | `dotmd glossary` "section found but no entries" lied when heading was missing | Split into "not found" vs "found but no recognizable entries"; messages name the section + file path |
+| F7 | `dotmd query` printed `results: 20` with no truncation marker | Now prints `results: 20 of 125 (use --all to see all)` when limited |
+| F8 | `staleDays: 60 + skipStale: true` silently dropped the number | Config-load `warn()` names the type, status, and conflicting fields. Same for `skipWarnings + requiresModule` |
+| F9 | `dotmd plans --sort status` / `--group module` hid the "N more" footer | Footer lifted out of the triage-only branch; emits for every view shape |
+| F10 | `dotmd context` / `dotmd hud` stale tail was unbounded (27 slugs ≈ 3 wrapped lines on beyond) | Caps at 8 slugs + `…and N more (run \`dotmd stale\` for the full list)`. Override via `config.context.staleTailLimit` |
+| F12 | `dotmd glossary --list` couldn't differentiate missing-section vs empty-section | Inherits F5's split — both messages now route through `--list` too |
+
+Test suite: 847 → 863 (+16 regression tests across `test/glossary.test.mjs`, `test/query.test.mjs`, `test/render.test.mjs`, `test/config.test.mjs`).
 
 ## Scale snapshot
 
