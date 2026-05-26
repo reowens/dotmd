@@ -2,6 +2,24 @@
 
 All notable changes to `dotmd-cli` are documented here. Older releases predate this file — see git tags and the GitHub Releases page for their notes.
 
+## 0.36.2 — 2026-05-26
+
+Six P2/P3 findings from the beyond-platform audit (`docs/audit-beyond-platform.md` F5, F7, F8, F9, F10, F12) batched as a no-breakage polish release. All additive or pure-render — no JSON shape changes, no schema changes, no behavior breaks. Shared theme: surface information dotmd was silently swallowing.
+
+### Added
+
+- **`dotmd query` and `dotmd plans` show "N of M (use --all)" when truncated.** Previously the text renderer dropped the `_totalBeforeLimit` value that the JSON output already exposed, so a query returning 20 of 125 docs printed `results: 20` with no hint that more existed. Now: `results: 20 of 125 (use --all to see all)`. The same fix lifts the existing "N more plans" footer out of `dotmd plans`' triage-only branch — it now renders for `--sort status` and `--group module/surface/owner` views too. (Audit findings F7, F9.)
+- **Config-load warning when a rich-status definition has contradictory flags.** A status configured with both `skipStale: true` and `staleDays: 60` silently dropped the number — the boolean won. Same for `skipWarnings: true` paired with `requiresModule: true` (the module requirement could never fire). `normalizeRichStatuses` now emits a `warn()` at load time naming the type, status, and conflicting fields. Catches dead config that would otherwise stay invisible. (Audit finding F8.)
+- **`config.context.staleTailLimit` (default 8).** Caps the slug list in `dotmd context` / `dotmd hud`'s stale tail. Beyond's audit hit 27 slugs (~3 wrapped lines) in this tail — now truncates to 8 + `…and N more (run \`dotmd stale\` for the full list)`. (Audit finding F10.)
+
+### Fixed
+
+- **`dotmd glossary` differentiates "section not found" from "section found but no entries."** Previously `parseGlossaryTable` returned `[]` for both cases, so a missing `## Terminology` heading (the actual case in beyond/platform) produced the misleading `Glossary section found but no entries parsed.` error. Now the error names which case applied and points at the right fix: either add the section, or check that its body has a recognizable table / schema→UI bullets. `dotmd glossary --list` inherits the same diagnostic split. (Audit findings F5, F12.)
+
+### Tests
+
+Added 16 regression tests across `test/glossary.test.mjs` (4), `test/query.test.mjs` (6), `test/render.test.mjs` (4), `test/config.test.mjs` (3) — totals went 847 → 863.
+
 ## 0.36.1 — 2026-05-26
 
 Two small polish items from the agent-UX audit's A2/A3 deferred list.
