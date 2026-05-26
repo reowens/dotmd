@@ -2,6 +2,24 @@
 
 All notable changes to `dotmd-cli` are documented here. Older releases predate this file — see git tags and the GitHub Releases page for their notes.
 
+## 0.36.3 — 2026-05-26
+
+Schema-correctness fix from the beyond-platform audit (F18). The frontmatter had two ways to spell the same fact — singular `module:` / `surface:` strings, or plural `modules:` / `surfaces:` arrays — and the reader merged them. Two-way schemas are accumulated debt: F3 (0.32.1) muted the noise on divergence, but the duality stayed. This release deprecates the singular form. The reader still merges (back-compat), so nothing breaks; new docs should always use the plural arrays.
+
+### Deprecated
+
+- **Singular `module:` / `surface:` frontmatter keys.** Every singular use now emits a `dotmd check` warning with the exact migration target inlined: `\`module:\` (singular) is deprecated — use \`modules: ["foo"]\`. Run \`dotmd lint --fix\` to migrate.` When both singular and plural are set, the target shows the merged deduped list. Suppressed for archived/terminal docs (same noise-control rule as F2). The reader still merges singular into plural transparently — existing corpora keep working. Removing the reader-side merge is reserved for a future major bump.
+
+### Changed
+
+- **`dotmd lint --fix` now migrates ALL singular `module:` / `surface:` use, not just comma-containing values.** The 0.34.0 lint pass only rewrote `surface: a, b` (multi-value strings); single-value singular keys stayed. F18 generalizes the migration: any singular use becomes a plural array, merging with any existing plural list and deduping. Internal fix type renamed `split-to-array` → `singular-to-plural` and now covers both `module`/`modules` and `surface`/`surfaces`.
+- **F3-era divergence-only warning is subsumed.** The previous "Both `module` and `modules` set with different values" warning was a noise-control compromise that only fired on divergence. F18 replaces it with a universal singular-use warning, so the message is consistent regardless of whether plural is also set.
+- **`modules`-required error no longer advertises the singular form.** The "Accepts singular `module:` or plural `modules:` list" hint in the `dotmd check` error message is gone — error messages shouldn't document a deprecated path.
+
+### Tests
+
+8 new regression tests across `test/validate.test.mjs` (5) and `test/lint.test.mjs` (3); 4 F3-era tests updated to assert the new universal-warning behavior. Total: 863 → 871.
+
 ## 0.36.2 — 2026-05-26
 
 Six P2/P3 findings from the beyond-platform audit (`docs/audit-beyond-platform.md` F5, F7, F8, F9, F10, F12) batched as a no-breakage polish release. All additive or pure-render — no JSON shape changes, no schema changes, no behavior breaks. Shared theme: surface information dotmd was silently swallowing.
