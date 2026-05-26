@@ -2,6 +2,26 @@
 
 All notable changes to `dotmd-cli` are documented here. Older releases predate this file — see git tags and the GitHub Releases page for their notes.
 
+## 0.37.0 — 2026-05-26
+
+Two findings from the beyond-platform audit (F4 + F13) batched into a single safety-and-noise release. The default `dotmd doctor` behavior changes — justifies the minor bump — but the new contract is the safer one and the friction surface for explicit writes is a single flag (`--apply`).
+
+### Changed
+
+- **`dotmd doctor` previews by default; `--apply` (alias `--yes`) writes. (F4 — P2 safety.)** The auto-fix pass (refs, lint, dates, index regen, Claude command refresh) used to mutate on first invocation — the audit found this surface was too low for a multi-step batch operation on a 1k+ doc repo (three files were rewritten before the auditor noticed and reverted). Now: bare `dotmd doctor` runs the same pipeline as a dry-run preview and prints a banner naming the flag — `dotmd doctor [preview — run with --apply to write]`. When mutation is desired, `--apply` (or `--yes`) flips back to write mode and the banner reads `[applying changes]`. If both `--apply` and `--dry-run` are passed, `--dry-run` wins (explicit safety prevails over explicit intent). Sub-modes — `--statuses`, `--migrate-template`, `--migrate-prompts` — keep their existing "write unless `--dry-run`" contracts because they're explicit one-shots the user opted into. **This is a behavior break for any scripted callers of plain `dotmd doctor`** — add `--apply` to scripts to preserve the old behavior. Mirrors `dotmd archive`'s safe pattern.
+
+### Added
+
+- **`dotmd check` collapses high-frequency auto-fixable warnings into one-line bulk-fix hints. (F13 — P3 noise.)** Per-doc warning lists used to repeat the same message for every doc in an auto-fixable category — beyond hit 43 `frontmatter \`updated: …\` is behind git history` lines plus per-doc singular `module:` / `surface:` deprecations (introduced in 0.36.3 / F18). The agent reader had to scan all of them to find structural findings; the fix command was buried per-line instead of named once. Now: any auto-fixable category with ≥3 occurrences is collapsed to a single line — `43 docs have \`updated\` behind git history — run \`dotmd touch --git\` to bulk-fix` — keeping the bulk-fix command top-of-mind. Categories below the threshold pass through as individual per-doc lines (small counts gain more from path information than from collapse). Categories shipped:
+  - `updated-behind-git` → `dotmd touch --git`
+  - singular `module:` deprecation (F18) → `dotmd lint --fix`
+  - singular `surface:` deprecation (F18) → `dotmd lint --fix`
+  Structural warnings (missing title, broken body links, ref reciprocity, etc.) always pass through per-doc — location matters for those. `dotmd check --no-collapse` opts every warning back to per-doc rendering. `dotmd check --json` is unchanged regardless of collapse — JSON consumers see the full per-doc warning list and the collapse is purely a text-render concern. `dotmd doctor`'s step-6 remaining-issues view inherits the collapse for free.
+
+### Tests
+
+Added 15 regression tests across `test/check-collapse.test.mjs` (5 unit + 6 CLI) and `test/doctor.test.mjs` (4 F4 cases). Total: 871 → 886.
+
 ## 0.36.3 — 2026-05-26
 
 Schema-correctness fix from the beyond-platform audit (F18). The frontmatter had two ways to spell the same fact — singular `module:` / `surface:` strings, or plural `modules:` / `surfaces:` arrays — and the reader merged them. Two-way schemas are accumulated debt: F3 (0.32.1) muted the noise on divergence, but the duality stayed. This release deprecates the singular form. The reader still merges (back-compat), so nothing breaks; new docs should always use the plural arrays.
