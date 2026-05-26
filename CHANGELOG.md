@@ -2,6 +2,20 @@
 
 All notable changes to `dotmd-cli` are documented here. Older releases predate this file — see git tags and the GitHub Releases page for their notes.
 
+## 0.38.0 — 2026-05-26
+
+Three agent-ergonomics findings from the beyond-platform audit (`docs/audit-beyond-platform.md` F11, F14, F17) bundled into a single minor. All additive — no behavior break for users who don't opt into the new surfaces. The minor bump is for F14 (expanded default prompt vocab) and F17a (new `dotmd journal` command); F11 is a new always-on warning.
+
+### Added
+
+- **`dotmd check` warns when an `in-session` plan has no live lease. (F11 — P3 agent ergonomics.)** Beyond had 8 plans claiming `status: in-session` with no `.dotmd/leases/` directory at audit time. Either 8 concurrent sessions or — more likely — some statuses were stale from sessions that crashed without releasing. The lease infrastructure (`src/lease.mjs`) already knew the live set; the validator just wasn't consulting it. Now `dotmd check` reads `.dotmd/in-session.json` per in-session plan and warns when there's no entry (`status: in-session but no active lease found …`) or the entry is stale (`status: in-session but lease is stale (last touched 48h ago …)`). Each variant names the exact fix: `dotmd release <plan>` to clear, or `dotmd status <plan> active` to re-queue. Always-on — legit concurrent sessions hold real leases, so this only fires on actual divergence.
+- **`shelved` prompt status: pending lifecycle gets a "saved but not next" bucket. (F14 — P2 agent ergonomics.)** The prompt vocab was `pending` / `claimed` / `archived`. Beyond had 2 prompts the user described as "next up" and "saved but parked" — both surfaced equally in `dotmd hud` and `dotmd briefing` because pending was the only non-terminal status. Plans get nine stop-statuses (CLAUDE.md's "every status earns its keep" principle); prompts collapsed two semantics into one. `shelved` joins the default vocab — visible to `dotmd prompts list` and `dotmd prompts list --include-archived`, but hidden from `hud` and the SessionStart "pending prompts" surface, and skipped by `dotmd prompts next`. Two new subcommands wrap the status flip: `dotmd prompts shelve <file-or-slug>` and `dotmd prompts unshelve <file-or-slug>`. No filesystem-layout change — status flip only.
+- **`dotmd journal` + opt-in `.dotmd/journal.jsonl`. (F17a — P2 agent observability.)** dotmd's primary user is Claude (per memory), but there was no usage signal: failed invocations (wrong arity, typoed argv), retries, cross-session activity. Every dotmd UX decision was informed by guesswork or one-shot audit snapshots. F17a is the foundation: every CLI invocation now appends one JSONL line — `{ts, sid, pid, argv, exit, ms, v, err?}` — to `.dotmd/journal.jsonl` when enabled via `DOTMD_JOURNAL=1` (env) or `journal: true` (config). Default-off keeps the surface clean for non-agent users. New `dotmd journal` reader supports `--tail N` (default 20), `--errors`, `--session <id>`, `--since <iso>`, `--by-command` (group + median ms + error rate), `--json` (raw array dump). Atomic concurrent writes via `appendFileSync` with `O_APPEND` (entries are well under `PIPE_BUF`). Lazy rotation to `.dotmd/journal.jsonl.1` at >5MB or oldest entry >30 days. F17b (hud reads journal) and F17c (`die()` self-correcting hints) are downstream — held for ~1 week of real journal data to shape the render.
+
+### Tests
+
+19 new regression tests: 4 in `test/validate.test.mjs` (F11 lease scenarios — no-lease, fresh, stale, non-in-session regression), 6 in `test/prompts.test.mjs` (F14 — list inclusion, `next` skip, empty-queue, shelve/unshelve, hud suppression), 9 in `test/journal.test.mjs` (F17a — opt-in default, env enable, config enable, concurrent atomicity, rotation, reader `--tail`/`--errors`/disabled-state). Total: 886 → 905.
+
 ## 0.37.0 — 2026-05-26
 
 Two findings from the beyond-platform audit (F4 + F13) batched into a single safety-and-noise release. The default `dotmd doctor` behavior changes — justifies the minor bump — but the new contract is the safer one and the friction surface for explicit writes is a single flag (`--apply`).
