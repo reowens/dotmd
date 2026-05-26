@@ -1,8 +1,8 @@
 ---
 type: prompt
-status: pending
+status: archived
 created: 2026-05-25T23:35:52Z
-updated: 2026-05-25T23:35:52Z
+updated: 2026-05-26T00:00:35Z
 dotmd_version: 0.34.0
 context: "Resume A4 Unidirectional Refs"
 related_plans:

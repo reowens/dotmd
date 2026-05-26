@@ -9,7 +9,7 @@ domain: cli-ux
 audience: internal
 parent_plan:
 related_plans:
-related_docs: docs/audit-beyond-platform.md
+related_docs: "> docs/audit-beyond-platform.md"
 current_state: Spec finalized; awaiting implementation.
 next_step: Write `src/modules.mjs` + tests, wire dispatcher.
 dotmd_version: 0.32.1

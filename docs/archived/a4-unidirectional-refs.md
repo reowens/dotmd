@@ -1,17 +1,17 @@
 ---
 type: plan
-status: active
+status: archived
 created: 2026-05-25T22:57:09Z
-updated: 2026-05-25T22:57:09Z
+updated: 2026-05-26T00:09:22Z
 surfaces: [cli]
 modules: [validate, index]
 domain: agent-ux
 audience: internal
 parent_plan:
 related_plans:
-related_docs: docs/agent-ux-audit.md
-current_state: Plan drafted. Design call settled — per-ref `>` prefix wins over per-field config.
-next_step: Pick up Phase 1 — parse the `>` prefix in `src/index.mjs:parseDocFile`.
+related_docs: "> docs/agent-ux-audit.md"
+current_state: Phases 1-3 shipped. Tests green (836/836). `dotmd check` warnings: 7 → 0. README + CHANGELOG drafted for 0.35.0.
+next_step: User confirms → `npm version minor` to cut 0.35.0.
 ---
 
 # A4 — per-field unidirectional refs
@@ -64,7 +64,7 @@ next_step: Pick up Phase 1 — parse the `>` prefix in `src/index.mjs:parseDocFi
 
 ## Phases
 
-### Phase 1 — Parse the `>` prefix ⬜
+### Phase 1 — Parse the `>` prefix ✅
 
 - In `src/index.mjs:parseDocFile`, where `refFields[field]` is populated, detect a leading `>` (with optional surrounding whitespace) and:
   - Strip it to the canonical path (so ref-resolution still works).
@@ -73,13 +73,13 @@ next_step: Pick up Phase 1 — parse the `>` prefix in `src/index.mjs:parseDocFi
 - Tests in `test/index.test.mjs`: ref value `> docs/foo.md` parses to path `docs/foo.md` with directionality `one-way`; plain `docs/foo.md` stays `two-way`; mixed list parses correctly per-entry.
 - ~30 LOC + tests.
 
-### Phase 2 — Skip reciprocity warning for one-way refs ⬜
+### Phase 2 — Skip reciprocity warning for one-way refs ✅
 
 - In `src/validate.mjs:checkBidirectionalReferences`, skip entries marked `one-way` on the outbound side when checking reciprocity.
 - Tests: A → `> B` should NOT warn even if B does not reference A back. A → B (no prefix) and B → A still satisfies reciprocity normally. Mixed list (some `>`, some not) only checks the un-prefixed ones.
 - ~10 LOC + tests.
 
-### Phase 3 — Retire the false positives in this repo ⬜
+### Phase 3 — Retire the false positives in this repo ✅
 
 - Edit `docs/archived/agent-ux-a1-a3.md` and `docs/plans/modules-dashboard.md` so `related_docs: docs/agent-ux-audit.md` becomes `related_docs: "> docs/agent-ux-audit.md"`.
 - Edit `docs/agent-ux-audit.md` so its reference to `docs/audit-beyond-platform.md` gets the prefix.
@@ -87,7 +87,7 @@ next_step: Pick up Phase 1 — parse the `>` prefix in `src/index.mjs:parseDocFi
 - Run `dotmd check` — should drop from 6 warnings to 0.
 - ~5-doc edit, no code change.
 
-### Phase 4 — Document + release ⬜
+### Phase 4 — Document + release ⏭
 
 - README: short note under the ref-fields section about the `>` prefix.
 - CHANGELOG entry under 0.35.0 (additive, no breaking change). Call out the convention with a one-line example.
@@ -102,8 +102,15 @@ next_step: Pick up Phase 1 — parse the `>` prefix in `src/index.mjs:parseDocFi
 
 ## Version History
 
+- **2026-05-26T00:09:22Z** Archived.
+- **2026-05-26** Phases 1-3 shipped in 0.35.0. `dotmd check` warnings: 7 → 0. Archiving.
+- **2026-05-26T00:00:40Z** Picked up (active → in-session).
 - **2026-05-25** Created. Spec: `[[agent-ux-audit]]` § A4. Deferred from the 0.34.0 release because A4 needed a config-schema design call; that decision is now in D1 (per-ref `>` prefix wins).
 
 ## Closeout
 
-<!-- Filled on archive: what shipped, key commits, deferrals dispositioned. -->
+Shipped in 0.35.0. Phases 1+2 added per-ref `>` opt-out to `src/index.mjs:parseDocFile` (parses + stores `refFieldDirections`) and `src/validate.mjs:checkBidirectionalReferences` (skips outbound one-way entries). Phase 3 retired 7 false-positive reciprocity warnings across 5 docs (leaf→upstream-parent refs + sibling-archived refs). `dotmd check` warnings: 7 → 0. Tests: 836/836 pass; 6 new (4 in `test/index.test.mjs`, 2 in `test/validate.test.mjs`).
+
+Open Questions settled: `parent_plan` accepts `>` as a no-op (orthogonal but consistent — implemented). `>` prefix is stripped before path resolution, so `dotmd check` output shows resolved paths, not the literal prefix.
+
+Deferrals dispositioned: A3 status-suggestion follow-up and A2 template-overlap polish remain in `[[agent-ux-audit]]` § A4's Deferred list as separate work items — not bundled into 0.35.0 to keep this release tightly scoped.

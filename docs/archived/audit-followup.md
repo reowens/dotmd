@@ -6,8 +6,8 @@ updated: 2026-05-24T20:07:34Z
 dotmd_version: 0.31.0
 context: "Audit Followup"
 related_plans:
-  - fix-init-silent-claude-commands-rewrite.md
-  - fix-stale-next-command-in-generated-slash-cmds.md
+  - "> fix-init-silent-claude-commands-rewrite.md"
+  - "> fix-stale-next-command-in-generated-slash-cmds.md"
 ---
 # Dotmd self-dogfood audit — 2026-05-23
 

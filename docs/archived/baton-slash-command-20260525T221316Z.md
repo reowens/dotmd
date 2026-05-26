@@ -9,7 +9,7 @@ domain: agent-ux
 audience: internal
 parent_plan:
 related_plans: slash-commands-self-heal.md
-related_docs: docs/agent-ux-audit.md
+related_docs: "> docs/agent-ux-audit.md"
 current_state: Phases 1+2 shipped — baton.md template + wiring landed in src/claude-commands.mjs; tests green (809/809). Awaiting Phase 3 release decision.
 next_step: Decide bundle-vs-standalone for 0.33.0 release (see Phase 3).
 dotmd_version: 0.32.1

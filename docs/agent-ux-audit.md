@@ -8,7 +8,7 @@ surfaces: [cli]
 domain: agent-ux
 audience: internal
 related_plans:
-related_docs: docs/audit-beyond-platform.md
+related_docs: "> docs/audit-beyond-platform.md"
 dotmd_version: 0.32.1
 ---
 

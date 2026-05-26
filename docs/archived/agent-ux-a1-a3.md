@@ -9,7 +9,7 @@ domain: agent-ux
 audience: internal
 parent_plan:
 related_plans:
-related_docs: docs/agent-ux-audit.md
+related_docs: "> docs/agent-ux-audit.md"
 current_state: Plan drafted. Spec lives in the audit doc; this plan sequences and bounds the work.
 next_step: Pick up Phase 1 (A1) — flip `dotmd index` default to write.
 ---
