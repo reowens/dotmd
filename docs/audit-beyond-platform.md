@@ -2,7 +2,7 @@
 type: doc
 status: active
 created: 2026-05-24
-updated: 2026-05-24
+updated: 2026-05-26
 dotmd_version: 0.32.0
 ---
 
@@ -10,7 +10,7 @@ dotmd_version: 0.32.0
 
 > Third real-codebase audit (after self-dogfood and gmax-brownfield). Target: `/Users/reoiv/Development/beyond/platform` — 1,182 scanned docs across 8 roots, heavily customized config (custom statuses, per-status flags, surface taxonomy, excludeDirs). Read-only inspection only; one inadvertent doctor mutation reverted (finding 6 below explains the slip). Findings sorted P1 → P3 by impact, in suggested fix order.
 >
-> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2 (see `## 0.36.2 — verified impact` below). **Open:** F4, F6, F11, F13 (polish/safety). **Features for 0.37.0+:** F14 (`shelved` prompt status), F15 (`filed: true` filing primitive).
+> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2 (see `## 0.36.2 — verified impact` below). **Open:** F4, F6, F11, F13 (polish/safety). **Features for 0.37.0+:** F14 (`shelved` prompt status), F15 (`filed: true` filing primitive), F17 (agent-usage journal — added 2026-05-26 from post-audit discussion).
 
 ## Verified impact (F1–F3, applied in this session)
 
@@ -264,6 +264,41 @@ dotmd already has every primitive needed — `--module` filter, staleness, statu
 
 **Why P1 despite being a feature.** The user's pain is acute — 222 plans flat with no triage path is a workflow blocker, not a polish item. Likely the highest-ROI item in the audit for day-to-day use at Beyond's scale, and probably for any dotmd user who crosses ~50 active plans.
 
+### 17. No observability surface for agent dotmd usage — fleet-of-Claude-sessions runs blind. — P2 (feature)
+
+**Context (added 2026-05-26, after F1-F16).** dotmd's primary user is Claude — the multi-instance reality is that 2-8 Claude sessions touch the same repo per day (8 `in-session` plans seen in beyond at audit time). Today there is essentially no visibility into what those sessions are doing:
+
+- **What exists:** `.dotmd/in-session.json` (lease state — who holds which plan), frontmatter `updated` + `dotmd_version` (light fingerprint), git history of `docs/` (what *changed*), `warn()` stderr output (~23 sites, ephemeral). No `DOTMD_DEBUG`, no command journal, no failed-call trail. `--verbose` exists on three commands and is not a global switch.
+- **Failure modes invisible today:**
+  - A session retries `dotmd status foo bar baz` (wrong arity) three times before giving up — no trace persists past the session.
+  - A fresh session after `/clear` or auto-compaction has no signal of what its previous self was doing beyond the lease (which only names the plan, not the recent argv trajectory).
+  - Cross-session divergence: Session A is mid-edit on a plan; Session B sees the in-session lease but no signal of recent activity beyond it.
+  - Stale-lease detection (F11) catches the *symptom*; the *behavior pattern* that produced it (session crashed mid-`pickup`-without-`release`, vs. session never archived after shipping) is lost.
+  - No corpus of "agents got this wrong" exists to inform CLAUDE.md improvements, slash-command shape, or die-message rewrites.
+
+**Reframe.** The valuable feature is not "a log file for the human to read" — it's *making the agents better at using dotmd*. The journal is plumbing; **`dotmd hud` is the product surface** (it's what every session sees on boot via the SessionStart hook).
+
+**Proposed fix.** Three landings, smallest first:
+
+1. **F17a — Opt-in JSONL journal + reader.** `.dotmd/journal.jsonl` (gitignored, per-machine). One `appendFileSync` at the tail of `bin/dotmd.mjs` per invocation: `{ts, sid, pid, argv, exit, ms, v, err?}`. `O_APPEND` is atomic for sub-PIPE_BUF writes — no locking needed across concurrent sessions. Rotation cap at 30 days / 5 MB. Opt-in via `DOTMD_JOURNAL=1` or `config.journal: true`. Reader: `dotmd journal --tail N | --errors | --session <id> | --by-command | --since <iso>`. ~90 lines + 5 tests.
+
+2. **F17b — `dotmd hud` reads the journal.** Two new sections, gated on `journal.exists`:
+   - *Your previous self:* `Last 3 cmds (this session): pickup foo.md, edit, status foo paused` — reorients a post-`/clear` session without a resume prompt.
+   - *Fleet:* `Session abc (alive 4m ago, 8 cmds on atlas-trip); session xyz stale on bar (28h, 0 cmds since pickup — run \`release --stale\`)` — different from F11 (which only catches dead leases): this catches *live divergence* across concurrent sessions.
+   - *Recent rejections:* `4× "Both module/modules" warnings on foyer plans (last 1h)` — surfaces patterns across sessions that suggest template/default issues.
+   ~60 lines + 4 tests.
+
+3. **F17c — `die()` consults the journal (self-correcting hints).** When the current failing argv is near-identical to a recent failed argv from the same session, append a verbose-hint paragraph instead of the terse one-liner. Subtle — only triggers on the *second* failure of the same shape. Optional polish, not blocking the other two. ~30 lines + 2 tests.
+
+**Sequencing.** Ship F17a as a contained release (small, well-bounded, no behavior change for users who don't opt in). Watch real journals for ~1 week before designing F17b's render — what's actually noisy vs. signal will surface from the data. F17c is a future polish ticket informed by F17b learnings.
+
+**Decisions that need a human call (not Claude's to make):**
+- Default-on or default-off? Default-off keeps surface clean for non-agent users; default-on means agents always benefit. Lean default-on when `.dotmd/` already exists (user has opted in to the dir).
+- argv-PII concern: future users could have `dotmd new plan acquire-acme-corp` in `.dotmd/journal.jsonl`. `.gitignore`'d means it stays local, but disclosure should be explicit in docs.
+- Ship F17a alone, or bundle with F11 + F14 (agent-ergonomics minor)?
+
+**Why P2, not P3.** Every prior audit (self-dogfood, gmax-brownfield, beyond-platform) has been a *one-shot reading repo state* — never a trajectory of how agents got there. Without journal data, every dotmd UX decision is informed by guesswork or a single audit's snapshot. F17a costs ~90 lines and immediately starts paying back into every subsequent design call.
+
 ## Out-of-scope observations
 
 - **Beyond's own data hygiene** is not dotmd's bug, but worth noting: 32 docs have `surface:` values that are file paths or globs (e.g. `scripts/dev.sh`, `docs/plans/**`) — these are stretching the taxonomy into a notes field. Would be useful for dotmd to detect "looks like a path, not a taxonomy token" and suggest `notes:` instead. (Not pursuing — too project-specific to merit a default rule.)
@@ -272,13 +307,28 @@ dotmd already has every primitive needed — `--module` filter, staleness, statu
 
 ## Suggested fix order
 
-F1, F2, F3 first — they're correctness bugs, not just polish. F1 makes `graph` lie; F2 makes `check` count noise from quiet statuses; F3 alone removes 105 false-positive warnings.
+F1, F2, F3 first — they're correctness bugs, not just polish. F1 makes `graph` lie; F2 makes `check` count noise from quiet statuses; F3 alone removes 105 false-positive warnings. **Shipped 0.32.1.**
 
 F4 next — doctor's mutation safety is a footgun every audit so far has documented in a different shape (the gmax brownfield audit's recommendations also leaned this direction).
 
-F5–F13 are polish; F5 + F6 have the highest "first encounter" cost for new users with custom configs; F11 helps every multi-instance user (which is *all* of them eventually).
+F5–F13 are polish; F5 + F6 have the highest "first encounter" cost for new users with custom configs; F11 helps every multi-instance user (which is *all* of them eventually). **F5, F7, F8, F9, F10, F12 shipped 0.36.2.**
 
 F14, F15, F16 emerged from post-audit discussion of how to handle prompt + plan organization at Beyond's scale (222 non-archived plans, 91 archived prompts, ~54 modules). They're feature additions, not bug fixes:
-- **F16** is highest-ROI for day-to-day — pure additive, no churn risk, immediately solves a workflow blocker. Do this first.
+- **F16** is highest-ROI for day-to-day — pure additive, no churn risk, immediately solves a workflow blocker. Do this first. **Shipped 0.36.0.**
 - **F14** is cheap and scoped — bundle with F16 or land standalone.
 - **F15** is load-bearing — worth scoping a plan + `/tmp/` spike before committing because it touches filesystem layout. Hold for last in the F14-F16 cluster.
+
+F17 (added 2026-05-26) is observability for the agent fleet — not a bug fix, but pays back into every subsequent dotmd design call by replacing guesswork with data. Ship F17a (journal + reader) standalone before bundling F17b (hud integration) so real journal data can shape what the hud should surface.
+
+### Post-0.36.2 release plan
+
+| Release | Findings | Theme | Scope |
+|---|---|---|---|
+| **0.37.0** | F4 + F13 | Safety + check-noise reduction | doctor dry-run-default + collapse high-frequency `check` warnings into bulk-fix hints. Behavior change justifies minor bump. ~200 lines + tests. |
+| **0.37.x or 0.38.0** | F11 + F14 + F17a | Agent ergonomics | Lease-stale signal in validate, `shelved` prompt status, opt-in journal + reader. All additive. ~170 lines + tests. |
+| **0.38.x or 0.39.0** | F17b | Hud reads journal | Two new hud sections (previous-self, fleet) + recent-rejections summary. Ship after ~1 week of real journal data informs the render. ~60 lines + tests. |
+| **0.39.0** | F6 | Stats reshape | Type-keyed `countsByStatus` JSON shape. ~70 lines + tests. |
+| **0.40.0** | F15 | Filed primitive | Untangle `archive: true` into `filed: true + terminal: true`. Needs `/tmp/` spike first. ~130 lines + tests. |
+| later | F17c | `die()` self-correcting hints | Polish informed by F17b. Not blocking. |
+
+Sequencing rationale: ship correctness/safety before features (F4+F13 first), then agent-ergonomics including the journal foundation, then let the journal inform the next layer of design (F17b → F17c), then close out the larger feature work (F6, F15). F4 + F13 going first means the highest-friction parts of the current UX (silent mutation, 43-line warning walls) are gone before agents start writing journal entries — otherwise you'd see those issues dominate the journal data and obscure other signals.
