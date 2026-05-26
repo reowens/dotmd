@@ -173,4 +173,45 @@ describe('dotmd lint', () => {
     ok(content.includes('- web'), 'has web in array');
     ok(content.includes('- ios'), 'has ios in array');
   });
+
+  it('--fix migrates singular module: to plural modules: array (F18, no existing plural)', () => {
+    const docsDir = setupProject();
+    writeFileSync(path.join(docsDir, 'm.md'),
+      '---\nstatus: active\nupdated: 2025-01-01\nmodule: foyer\n---\n# M\n');
+
+    const result = run(['lint', '--fix']);
+    strictEqual(result.status, 0, `stderr: ${result.stderr}`);
+
+    const content = readFileSync(path.join(docsDir, 'm.md'), 'utf8');
+    ok(!/^module:/m.test(content), 'singular module: removed');
+    ok(/^modules:\n  - foyer$/m.test(content), `expected plural block: ${content}`);
+  });
+
+  it('--fix merges singular module: into existing modules: array (F18)', () => {
+    const docsDir = setupProject();
+    writeFileSync(path.join(docsDir, 'm.md'),
+      '---\nstatus: active\nupdated: 2025-01-01\nmodule: foyer\nmodules:\n  - bar\n---\n# M\n');
+
+    const result = run(['lint', '--fix']);
+    strictEqual(result.status, 0, `stderr: ${result.stderr}`);
+
+    const content = readFileSync(path.join(docsDir, 'm.md'), 'utf8');
+    ok(!/^module:/m.test(content), 'singular module: removed');
+    ok(/-\s+foyer/.test(content), `foyer added to plural: ${content}`);
+    ok(/-\s+bar/.test(content), `existing bar preserved: ${content}`);
+  });
+
+  it('--fix dedupes when singular module: equals an entry already in modules: (F18)', () => {
+    const docsDir = setupProject();
+    writeFileSync(path.join(docsDir, 'm.md'),
+      '---\nstatus: active\nupdated: 2025-01-01\nmodule: foyer\nmodules:\n  - foyer\n---\n# M\n');
+
+    const result = run(['lint', '--fix']);
+    strictEqual(result.status, 0, `stderr: ${result.stderr}`);
+
+    const content = readFileSync(path.join(docsDir, 'm.md'), 'utf8');
+    ok(!/^module:/m.test(content), 'singular module: removed');
+    const foyerLines = content.split('\n').filter(l => /^\s*-\s+foyer\s*$/.test(l));
+    strictEqual(foyerLines.length, 1, `expected single foyer entry, got: ${content}`);
+  });
 });

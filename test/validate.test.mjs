@@ -538,3 +538,54 @@ describe('rootStatuses validation', () => {
     ok(result.stdout.includes('Missing frontmatter `updated`'), 'enforces updated for known root status');
   });
 });
+
+describe('F18: singular module/surface deprecation warning', () => {
+  it('warns when only singular `module:` is set, names the migration target', () => {
+    const docsDir = setupProject();
+    writeFileSync(path.join(docsDir, 'a.md'),
+      '---\nstatus: active\nupdated: 2025-01-01\nmodule: foyer\n---\n# A\n');
+    const result = run(['check']);
+    const matches = result.stdout.split('\n').filter(l => l.includes('`module:` (singular) is deprecated'));
+    strictEqual(matches.length, 1, `expected exactly one deprecation warning, got: ${result.stdout}`);
+    ok(matches[0].includes('modules: ["foyer"]'), `expected migration target in message: ${matches[0]}`);
+  });
+
+  it('warns when singular + plural agree (target shows single value, no dup)', () => {
+    const docsDir = setupProject();
+    writeFileSync(path.join(docsDir, 'a.md'),
+      '---\nstatus: active\nupdated: 2025-01-01\nmodule: foyer\nmodules:\n  - foyer\n---\n# A\n');
+    const result = run(['check']);
+    const matches = result.stdout.split('\n').filter(l => l.includes('`module:` (singular) is deprecated'));
+    strictEqual(matches.length, 1, `expected exactly one deprecation warning, got: ${result.stdout}`);
+    ok(matches[0].includes('modules: ["foyer"]'), `target should be deduped to one value: ${matches[0]}`);
+  });
+
+  it('warns when singular + plural diverge (target shows merged list)', () => {
+    const docsDir = setupProject();
+    writeFileSync(path.join(docsDir, 'a.md'),
+      '---\nstatus: active\nupdated: 2025-01-01\nmodule: foyer\nmodules:\n  - other\n---\n# A\n');
+    const result = run(['check']);
+    const matches = result.stdout.split('\n').filter(l => l.includes('`module:` (singular) is deprecated'));
+    strictEqual(matches.length, 1, `expected exactly one deprecation warning, got: ${result.stdout}`);
+    ok(matches[0].includes('modules: ["foyer", "other"]'), `target should merge: ${matches[0]}`);
+  });
+
+  it('no longer emits the old "both module/modules set with different values" message', () => {
+    const docsDir = setupProject();
+    writeFileSync(path.join(docsDir, 'a.md'),
+      '---\nstatus: active\nupdated: 2025-01-01\nmodule: foyer\nmodules:\n  - other\n---\n# A\n');
+    const result = run(['check']);
+    ok(!result.stdout.includes('set with different values'),
+      `F3 divergence message should be subsumed: ${result.stdout}`);
+  });
+
+  it('warns for singular surface: too', () => {
+    const docsDir = setupProject();
+    writeFileSync(path.join(docsDir, 'a.md'),
+      '---\nstatus: active\nupdated: 2025-01-01\nsurface: web\n---\n# A\n');
+    const result = run(['check']);
+    const matches = result.stdout.split('\n').filter(l => l.includes('`surface:` (singular) is deprecated'));
+    strictEqual(matches.length, 1, `expected exactly one deprecation warning, got: ${result.stdout}`);
+    ok(matches[0].includes('surfaces: ["web"]'), `expected migration target in message: ${matches[0]}`);
+  });
+});

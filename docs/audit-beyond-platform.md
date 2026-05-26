@@ -10,7 +10,7 @@ dotmd_version: 0.32.0
 
 > Third real-codebase audit (after self-dogfood and gmax-brownfield). Target: `/Users/reoiv/Development/beyond/platform` — 1,182 scanned docs across 8 roots, heavily customized config (custom statuses, per-status flags, surface taxonomy, excludeDirs). Read-only inspection only; one inadvertent doctor mutation reverted (finding 6 below explains the slip). Findings sorted P1 → P3 by impact, in suggested fix order.
 >
-> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2 (see `## 0.36.2 — verified impact` below). **Open:** F4, F6, F11, F13 (polish/safety). **Features for 0.37.0+:** F14 (`shelved` prompt status), F15 (`filed: true` filing primitive), F17 (agent-usage journal — added 2026-05-26 from post-audit discussion).
+> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2. F18 shipped in 0.36.3 (subsumes F3's mitigation with a universal singular-key deprecation). **Open:** F4, F6, F11, F13 (polish/safety). **Features for 0.37.0+:** F14 (`shelved` prompt status), F15 (`filed: true` filing primitive), F17 (agent-usage journal — added 2026-05-26 from post-audit discussion).
 
 ## Verified impact (F1–F3, applied in this session)
 
@@ -299,6 +299,20 @@ dotmd already has every primitive needed — `--module` filter, staleness, statu
 
 **Why P2, not P3.** Every prior audit (self-dogfood, gmax-brownfield, beyond-platform) has been a *one-shot reading repo state* — never a trajectory of how agents got there. Without journal data, every dotmd UX decision is informed by guesswork or a single audit's snapshot. F17a costs ~90 lines and immediately starts paying back into every subsequent design call.
 
+### 18. Singular `module:` / `surface:` keys are a duplicate schema — deprecate in favor of the plural arrays. — P1 (correctness)
+
+**Context.** dotmd's frontmatter has two ways to express the same fact: a doc can declare its modules via `module:` (singular string) OR `modules:` (array). Same for `surface:` / `surfaces:`. The reader (`src/index.mjs:218-220`) merges both into one plural array, so they're functionally interchangeable — but two ways to express the same fact creates user confusion, template ambiguity, validation contortions, and was responsible for 33% (105 of 318) of beyond/platform's check warnings before the F3 mitigation in 0.32.1.
+
+F3 covered the noise symptom (warn only on divergence). The underlying duality stayed. New docs sometimes get `module:`, sometimes `modules:`, sometimes both. Two-way schemas are not API design — they're accumulated debt.
+
+**Proposed fix (shipped 0.36.3).** Three landings, all in one patch release because the reader stays back-compat:
+
+1. **Validator.** Replace the F3 divergence-only warning with a universal deprecation warning that fires on every singular use, with the migration target inlined: `` `module:` (singular) is deprecated — use `modules: ["foyer"]`. Run `dotmd lint --fix` to migrate. `` When singular and plural diverge, the target shows the merged list (`modules: ["foyer", "other"]`). Suppressed for archived/terminal docs (same rule as F2).
+2. **Lint.** Generalize the existing `surface: a, b` migration (0.34.0) to cover ALL singular use, comma or not. Internal fix type renamed `split-to-array` → `singular-to-plural`. Handles both `module/modules` and `surface/surfaces`. Merges with existing plural array if present; dedupes.
+3. **Reader stays back-compat.** The `src/index.mjs:218-220` singular-into-plural merge is untouched. Existing corpora keep working; new docs go through the plural path. Removing the reader merge is reserved for a future major bump.
+
+**Why P1, not P2.** F3 was P1 (noise), and F18 is the proper schema fix that F3 was a holding pattern for. Singular keys leaking into new docs (because the schema accepts both) means the agent-facing schema is ambiguous — and ambiguous schemas are how every audit so far accumulated its noisy-validator complaints. Patching the noise without fixing the duality means F3-class findings recur every time a new template lands.
+
 ## Out-of-scope observations
 
 - **Beyond's own data hygiene** is not dotmd's bug, but worth noting: 32 docs have `surface:` values that are file paths or globs (e.g. `scripts/dev.sh`, `docs/plans/**`) — these are stretching the taxonomy into a notes field. Would be useful for dotmd to detect "looks like a path, not a taxonomy token" and suggest `notes:` instead. (Not pursuing — too project-specific to merit a default rule.)
@@ -324,6 +338,7 @@ F17 (added 2026-05-26) is observability for the agent fleet — not a bug fix, b
 
 | Release | Findings | Theme | Scope |
 |---|---|---|---|
+| **0.36.3** | F18 | Schema correctness | Deprecate singular `module:` / `surface:` keys; `dotmd lint --fix` migrates. Reader stays back-compat (no breakage). Patch bump. ~80 lines + 8 tests. **Shipped 2026-05-26.** |
 | **0.37.0** | F4 + F13 | Safety + check-noise reduction | doctor dry-run-default + collapse high-frequency `check` warnings into bulk-fix hints. Behavior change justifies minor bump. ~200 lines + tests. |
 | **0.37.x or 0.38.0** | F11 + F14 + F17a | Agent ergonomics | Lease-stale signal in validate, `shelved` prompt status, opt-in journal + reader. All additive. ~170 lines + tests. |
 | **0.38.x or 0.39.0** | F17b | Hud reads journal | Two new hud sections (previous-self, fleet) + recent-rejections summary. Ship after ~1 week of real journal data informs the render. ~60 lines + tests. |
