@@ -8,6 +8,7 @@
 |-----|-----------------|
 | [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Active: No current_state set |
 | [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active: No current_state set |
+| [F11 F14 F17a Agent Ergonomics](plans/f11-f14-f17a-agent-ergonomics.md) | Active: Scoped not started. Plan body has full runlist with file:line refs; ready for pickup. |
 
 ## Archived
 
