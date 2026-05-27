@@ -8,6 +8,10 @@
 |-----|-----------------|
 | [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Active: No current_state set |
 | [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active: No current_state set |
+| [Command Aliases](plans/command-aliases.md) | Active: No current_state set |
+| [Die Self Correcting Hints](plans/die-self-correcting-hints.md) | Active: No current_state set |
+| [Filed Primitive](plans/filed-primitive.md) | Active: No current_state set |
+| [Hud Reads Journal](plans/hud-reads-journal.md) | Active: No current_state set |
 
 ## Archived
 
