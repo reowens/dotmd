@@ -12,8 +12,8 @@ related_plans:
 related_docs:
   - > ../audit-beyond-platform.md
 summary: F6 — split `partial` totals in `dotmd stats` by doc type so `plan/partial` (work shipped + tail deferred) and `doc/partial` (incomplete reference material) don't render as one number.
-current_state: Plan scaffolded; no code yet.
-next_step: Read `buildIndex`'s `countsByStatus` shape, add a typed sibling `countsByType`, and render `Status` block in `_renderStats` grouped by type.
+current_state: All 3 phases shipped. 951/951 tests passing. Live `dotmd stats` renders grouped (Plans / Docs / Prompts).
+next_step: Archive + release 0.39.6.
 ---
 
 # F6 Partial Status Split
@@ -64,20 +64,20 @@ None — design is mechanical.
 
 ## Phases
 
-### Phase 1 — index: add `countsByType` ⬜
+### Phase 1 — index: add `countsByType` ✅ shipped
 
 - `src/index.mjs:66-75`: extend the existing `countsByStatus` block to also produce `countsByType = { [type]: { [status]: count } }`. Same fallback rules for unknown statuses; untyped docs land under `unknown`.
 - Expose in the return object: `{ docs, countsByStatus, countsByType, warnings, errors }`.
 - Test: `test/index.test.mjs` — seed a multi-type corpus, assert both shapes.
 
-### Phase 2 — stats: render grouped by type ⬜
+### Phase 2 — stats: render grouped by type ✅ shipped
 
 - `src/stats.mjs:buildStats`: pass `countsByType` through into the stats blob.
 - `src/stats.mjs:_renderStats`: replace the single-line Status block with a per-type render when `Object.keys(countsByType).length > 1`. Sort types by `config.validTypes` order (so `plan` comes before `doc` for the built-in vocab). Indent each line under the existing `Status` bold heading.
 - JSON renderer: include `countsByType` in the output.
 - Test: `test/stats.test.mjs` — assert single-type renders flat, multi-type renders grouped.
 
-### Phase 3 — verification ⬜
+### Phase 3 — verification ✅ shipped
 
 - `npm test` — all pass.
 - `dotmd stats` on this repo (single-type plans + docs + prompts) — verify grouped render shape.
@@ -94,4 +94,6 @@ None — design is mechanical.
 
 ## Closeout
 
-<!-- Filled on archive: what shipped, key commits, deferrals dispositioned. -->
+Shipped in 0.39.6. **Phase 1:** `buildIndex` now produces a typed `countsByType: { [type]: { [status]: count } }` alongside the existing flat `countsByStatus` — both populated, both exported, no removal. Untyped docs land under `unknown`. **Phase 2:** `dotmd stats` renders the Status block grouped by type when 2+ types have docs (`Plans: …`, `Docs: …`, `Prompts: …`, `Untyped: …` last); single-type repos keep the existing flat line so no needless headers appear. Type order follows `config.validTypes` declaration order. `--json` output gains `countsByType` next to `countsByStatus`. **Phase 3:** 951/951 tests (+6 new across `test/index.test.mjs` and `test/stats.test.mjs`); live `dotmd stats` on the dotmd repo confirms the split (`Plans: archived: 11  in-session: 1`, `Docs: active: 2`, `Prompts: archived: 14`).
+
+No deferrals — the audit's "briefing already splits correctly" observation held up; touching it would have been pure regression risk for no user-visible benefit. F6 closes out the last open polish item from `docs/audit-beyond-platform.md`.
