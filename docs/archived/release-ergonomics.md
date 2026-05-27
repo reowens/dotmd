@@ -1,8 +1,8 @@
 ---
 type: plan
-status: in-session
+status: archived
 created: 2026-05-27T09:17:53Z
-updated: 2026-05-27T10:10:37Z
+updated: 2026-05-27T12:30:08Z
 surfaces:
   - platform
 # modules — real module name(s), or `none` for tooling/infra plans
@@ -82,21 +82,32 @@ Today, leases get orphaned when:
 - The user runs `dotmd archive` from a *different* session than the one holding (archive releases by path, but a different orphaned lease elsewhere stays)
 - The user manually `dotmd release`s but the lease was already auto-released by archive — produces the noisy "No leases for session <UUID>" line
 
-### Fix shape
+### What we can actually detect without a daemon
+
+A heartbeat-on-every-CLI-invocation was considered and rejected: it conflates "session ran dotmd recently" with "session is alive." A Claude session that picks up a plan and then spends 20 minutes editing code and running tests doesn't touch dotmd in that window — but is clearly alive. With a 10-min heartbeat threshold, another session's read-side command would scrub that healthy lease. Useless without a long-lived process.
+
+Real liveness needs either (a) a daemon that pings while the session is alive, or (b) walking `process.ppid` past the transient shell to find the actual Claude Code process pid and using `process.kill(pid, 0)`. Both are too much surface for this patch. See follow-up note at the bottom.
+
+So this fix only does what's honestly detectable from age:
+
+### Fix shape (option A — age-based, no liveness)
+
+**Lower the stale threshold** from 24h to **4h** (`STALE_LEASE_AGE_MS` in `src/lease.mjs`). 4h is long enough to survive a normal coffee/lunch break or an afternoon spent in a single Claude session, short enough that a crashed lease from this morning doesn't sit there overnight.
 
 **Opportunistic scrubbing** on every read-side command (`hud`, `briefing`, `plans`, `list`, `pickup`, `context`):
 
-- Read all lease entries
-- For each: is the owning pid alive? Is the timestamp <10 min old (heartbeat fresh)?
-- If neither: silently delete the entry. Log to journal at debug level only.
+- Read all leases
+- For each: is `pickedUpAt` older than `STALE_LEASE_AGE_MS`?
+- If yes: silently delete the entry **and** flip the plan's frontmatter from `in-session` back to its recorded `oldStatus`. No stderr output. Log to journal at debug level only.
 
-**Manual `dotmd release` becomes silent on no-op.** Today it prints "No leases to release for session <UUID>." That's a verbose no-op success — change to: print nothing, exit 0. Only print when work was actually done ("Released N leases: X, Y.").
+**Manual `dotmd release` becomes silent on no-op.** Today (`src/lifecycle.mjs:477`) it prints "No leases to release for session <UUID>." Change to: print nothing, exit 0. Only print when work was actually done ("Released N leases: X, Y.").
 
-**Pickup auto-takeover for clearly-dead leases.** Today pickup refuses on conflict and suggests `--takeover`. For leases where the pid is verifiably dead, take over silently with a one-line note ("Picked up — prior session <id> exited without releasing."). Reserve `--takeover` confirmation for the genuinely-ambiguous case (pid alive but stuck, or unknown pid).
+**Pickup auto-takeover for stale leases (post-scrub).** With opportunistic scrub running on `pickup` itself, a stale conflict normally evaporates before the takeover branch is reached. If a race leaves a `conflict-stale` outcome, take over silently with a one-line note ("Picked up — prior session <id> exited without releasing."). Keep `--takeover` requirement for `conflict-alive`.
 
-### Heartbeat plumbing
+### Out of scope (deferred)
 
-Each `dotmd` invocation by the holding session bumps its lease timestamp. Cheap: read lease file → if owner matches current sid, write back with current timestamp → continue. Adds ~1ms to startup. Without this, "fresh" means "created in last 10 min" which is too coarse.
+- **Real liveness detection** (heartbeat-via-daemon or ancestor-pid lookup). File a follow-up if 4h-age scrubbing isn't enough in practice.
+- **Anything that needs a long-lived process.**
 
 ## Fix C — `dotmd set <status> [<path>]` collapses the verb taxonomy
 
