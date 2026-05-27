@@ -10,7 +10,7 @@ dotmd_version: 0.38.0
 
 > Third real-codebase audit (after self-dogfood and gmax-brownfield). Target: `/Users/reoiv/Development/beyond/platform` — 1,182 scanned docs across 8 roots, heavily customized config (custom statuses, per-status flags, surface taxonomy, excludeDirs). Read-only inspection only; one inadvertent doctor mutation reverted (finding 6 below explains the slip). Findings sorted P1 → P3 by impact, in suggested fix order.
 >
-> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2. F18 shipped in 0.36.3 (subsumes F3's mitigation with a universal singular-key deprecation). F4 + F13 shipped in 0.37.0 (doctor dry-run-default + bulk-fix-hint collapse on `check`). F11 + F14 + F17a shipped in 0.38.0 (stale-lease warning in `check`, `shelved` prompt status, opt-in JSONL journal + `dotmd journal` reader). **Open:** F6 (polish). **Features for 0.38.x+:** F15 (`filed: true` filing primitive), F17b (hud reads journal — hold for ~1 week of real journal data), F17c (`die()` self-correcting hints — downstream of F17b).
+> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2. F18 shipped in 0.36.3 (subsumes F3's mitigation with a universal singular-key deprecation). F4 + F13 shipped in 0.37.0 (doctor dry-run-default + bulk-fix-hint collapse on `check`). F11 + F14 + F17a shipped in 0.38.0 (stale-lease warning in `check`, `shelved` prompt status, opt-in JSONL journal + `dotmd journal` reader). **Open:** F6 (polish). **Features for 0.38.x+:** F15 (`filed: true` filing primitive), F17b (hud reads journal — hold for ~1 week of real journal data), F17c (`die()` self-correcting hints — downstream of F17b), F19 (runlist primitive — needs scoping pass).
 
 ## Verified impact (F1–F3, applied in this session)
 
@@ -312,6 +312,20 @@ F3 covered the noise symptom (warn only on divergence). The underlying duality s
 3. **Reader stays back-compat.** The `src/index.mjs:218-220` singular-into-plural merge is untouched. Existing corpora keep working; new docs go through the plural path. Removing the reader merge is reserved for a future major bump.
 
 **Why P1, not P2.** F3 was P1 (noise), and F18 is the proper schema fix that F3 was a holding pattern for. Singular keys leaking into new docs (because the schema accepts both) means the agent-facing schema is ambiguous — and ambiguous schemas are how every audit so far accumulated its noisy-validator complaints. Patching the noise without fixing the duality means F3-class findings recur every time a new template lands.
+
+### 19. No "runlist" primitive — agents have no way to group plans into an ordered execution set. — P2 (feature)
+
+**Context.** Captured from a user follow-up after the issue #10 sprints landed (2026-05-26). Beyond's platform tooling has a "runlist" concept that groups multiple work items into a single named sequence. dotmd today has `queued-after` (bilateral per-plan sequencing) but no first-class group: agents wanting to run a 5-plan sprint as one unit have to either (a) chain `queued-after` per pair, (b) maintain the order in human prose inside a hub plan, or (c) eyeball `dotmd plans --status active` and pick the right one each session.
+
+**Sketch (not yet scoped).** Likely shape — TBD on design call:
+
+- A `runlist:` field on a hub plan (or a new `type: runlist` doc) that lists ordered plan slugs.
+- `dotmd runlist <name>` shows the list with each plan's status; `dotmd runlist next <name>` picks up the next non-shipped plan.
+- Integrates with existing `queued-after` (the runlist auto-wires per-pair predecessors so the existing query/pickup logic still applies).
+
+**Why P2, not P1.** Multi-plan grouping is currently survivable with `queued-after` + prose — slow but possible. Promotes if multiple users hit the same workflow gap.
+
+**Open questions.** Doc type (`plan` with a `runlist:` field vs. dedicated `type: runlist`)? Behavior when a runlist plan ships partial / awaits — does the list pause? Relationship to `parent_plan` (already exists, but unordered)?
 
 ## Out-of-scope observations
 
