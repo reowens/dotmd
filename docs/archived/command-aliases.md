@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: archived
 created: 2026-05-27T02:39:39Z
-updated: 2026-05-27T02:39:39Z
+updated: 2026-05-27T03:52:55Z
 surfaces:
 modules:
 domain:
@@ -82,4 +82,19 @@ Plus a small audit pass on whether other singular/plural splits in the dispatche
 
 ## Closeout
 
-(Add when shipped: what landed, sub-audit findings if any, bump used.)
+**Landed (pending release):**
+- `bin/dotmd.mjs:main()` — one-line `if (command === 'prompt') command = 'prompts'` rewrite, positioned AFTER the `help` command handler but BEFORE the per-command `--help` dispatch so `dotmd prompt --help` correctly routes to `HELP.prompts`. `command` was changed from `const` to `let` to allow reassignment.
+- `src/prompts.mjs` — added `'resume'` to `SUBCOMMANDS` and a `case 'resume':` branch that delegates to `runPromptsUse`. Both names valid; canonical "Consumed: …" output unchanged.
+- `bin/dotmd.mjs:HELP.prompts` — documents the singular alias up top, lists `resume` alongside `use` in the subcommands table, and adds two new example lines showing both alias forms in action.
+- `test/aliases.test.mjs` (new, 4 tests): singular `prompt list` byte-identical to `prompts list --json`; `prompt --help` routes to `HELP.prompts`; `prompts resume` produces same output shape as `prompts use` (with filename normalization); chained `prompt resume` proves the singular rewrite + verb alias compose correctly.
+
+**Sub-audit findings (every singular/plural pair in the dispatcher):**
+- **COLLAPSED:** `prompt` → `prompts`. No collision, pure friction. Shipped.
+- **KEEP-SPLIT-DELIBERATELY:** `status` ↔ `statuses`. These mean different things — `status <file>` sets a doc's status; `statuses` lists status definitions. Aliasing either way would create real ambiguity (`dotmd status` already has subject-noun semantics that block treating it as a list-form). No change.
+- **DEFER (no obvious canonical mapping):** `plan` ↔ `plans`, `module` ↔ `modules`. `plans`/`modules` are list-form views; `module <name>` is a deep view, and there's no current `plan <slug>` command at all. Adding singular forms requires picking a canonical action (pickup? pickup-card? query?), which the F20 author flagged as undecided. Left for a future plan when the canonical mapping is clear.
+
+**Smoke verified locally:** `prompt list` == `prompts list`, `prompt --help` == `prompts --help`, `prompts resume <file>` body matches `prompts use <file>` body. Existing 962 tests pass; 4 new tests pass. Total 966.
+
+**Gotcha note for future:** the `prompt` rewrite is a `let` reassignment, so any code that previously assumed `command` was the literal first argv token now sees the normalized form. Nothing in `main()` re-derives `command` from `args[0]`, so this is safe — but if anyone adds such code, the rewrite would need to be reconsidered.
+
+**Bump:** held with F22 for one combined patch release (0.39.x).
