@@ -10,7 +10,7 @@ dotmd_version: 0.38.0
 
 > Third real-codebase audit (after self-dogfood and gmax-brownfield). Target: `/Users/reoiv/Development/beyond/platform` — 1,182 scanned docs across 8 roots, heavily customized config (custom statuses, per-status flags, surface taxonomy, excludeDirs). Read-only inspection only; one inadvertent doctor mutation reverted (finding 6 below explains the slip). Findings sorted P1 → P3 by impact, in suggested fix order.
 >
-> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2. F18 shipped in 0.36.3 (subsumes F3's mitigation with a universal singular-key deprecation). F4 + F13 shipped in 0.37.0 (doctor dry-run-default + bulk-fix-hint collapse on `check`). F11 + F14 + F17a shipped in 0.38.0 (stale-lease warning in `check`, `shelved` prompt status, opt-in JSONL journal + `dotmd journal` reader). F6 shipped in 0.39.6 (per-type counts; `dotmd stats` groups Status by type — closes the last polish item). **Open:** none. F19 shipped in 0.39.7 (runlist primitive — `dotmd runlist <hub>` and `dotmd runlist next <hub>`; `runlist:` field on plans; back-pointer validator). **Features for 0.39.x+:** F15 (`filed: true` filing primitive), F17b (hud reads journal — hold for ~1 week of real journal data), F17c (`die()` self-correcting hints — downstream of F17b), F20 (`dotmd prompt`/`prompts` alias + `resume`/`use` alias — P3 UX).
+> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2. F18 shipped in 0.36.3 (subsumes F3's mitigation with a universal singular-key deprecation). F4 + F13 shipped in 0.37.0 (doctor dry-run-default + bulk-fix-hint collapse on `check`). F11 + F14 + F17a shipped in 0.38.0 (stale-lease warning in `check`, `shelved` prompt status, opt-in JSONL journal + `dotmd journal` reader). F6 shipped in 0.39.6 (per-type counts; `dotmd stats` groups Status by type — closes the last polish item). **Open:** none. F19 shipped in 0.39.7 (runlist primitive — `dotmd runlist <hub>` and `dotmd runlist next <hub>`; `runlist:` field on plans; back-pointer validator). F21 shipped in 0.39.8 (reorder `dotmd new <type>` help so `@path`/`-` come before inline, plus agent-tip about PreToolUse hook scanning — sourced from issue #11). **Features for 0.39.x+:** F15 (`filed: true` filing primitive), F17b (hud reads journal — hold for ~1 week of real journal data), F17c (`die()` self-correcting hints — downstream of F17b), F20 (`dotmd prompt`/`prompts` alias + `resume`/`use` alias — P3 UX).
 
 ## Verified impact (F1–F3, applied in this session)
 
@@ -346,6 +346,18 @@ F3 covered the noise symptom (warn only on divergence). The underlying duality s
 **Why P3.** Pure ergonomics — every workflow has a working spelling today. Cheap fix, high frequency of friction.
 
 **Scope estimate.** ~20-40 lines in `bin/dotmd.mjs` + 2 tests (singular dispatches identically; `resume` and `use` produce identical output on the same fixture).
+
+### 21. Help for `dotmd new <type>` orders inline-body first — agents pattern-match it and trip PreToolUse hooks. — P3 (UX) — SHIPPED 0.39.8
+
+**Context.** Filed as GitHub issue #11 (2026-05-26). Author hit it writing a resume prompt whose body described a destructive-git incident — the PreToolUse hook scanning bash commands for that literal fired on the inline-body form `dotmd new prompt foo "...g-i-t s-t-a-s-h..."` because the literal lives in the bash command string. The CLI already supports `@/tmp/draft.md` and stdin `-` — both keep body content out of the shell — but the help text put inline first, and agents pattern-match on the first example.
+
+**Fix.** Pure docs:
+
+- Reordered the body-input list and prompt examples in `bin/dotmd.mjs` HELP.new so `@path` / `-` come first; inline last.
+- Added an explicit "Tip for agents" paragraph naming the PreToolUse-hook scenario.
+- Mirrored the reorder + tip in `CLAUDE.md`'s "Queuing prompts for future sessions" block.
+
+**Out of scope.** The stretch lint-warning idea (warn on long inline bodies) — issue author called it overkill given how cheap the doc fix is. Not pursuing.
 
 ## Out-of-scope observations
 
