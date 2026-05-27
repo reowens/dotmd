@@ -1,8 +1,8 @@
 ---
 type: prompt
-status: pending
+status: archived
 created: 2026-05-27T02:47:48Z
-updated: 2026-05-27T02:47:48Z
+updated: 2026-05-27T03:39:46Z
 dotmd_version: 0.39.8
 context: "Resume Dotmd Backlog"
 related_plans:
