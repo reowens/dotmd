@@ -1,8 +1,8 @@
 ---
 type: prompt
-status: pending
+status: archived
 created: 2026-05-27T00:56:37Z
-updated: 2026-05-27T00:56:37Z
+updated: 2026-05-27T00:59:23Z
 dotmd_version: 0.39.4
 context: "Resume Issue 10 Sprint 3"
 related_plans:
