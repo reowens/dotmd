@@ -11,10 +11,11 @@
 | [Die Self Correcting Hints](plans/die-self-correcting-hints.md) | Active: No current_state set |
 | [Filed Primitive](plans/filed-primitive.md) | Active: No current_state set |
 | [Hud Reads Journal](plans/hud-reads-journal.md) | Active: No current_state set |
+| [Release Ergonomics](plans/release-ergonomics.md) | Active: Three release-UX warts surfaced shipping 0.40.0/0.40.1. (1) `npm version` only stages package.json — feature commits, archived plans, and index regen each force their own commit. (2) `dotmd release` is mostly a no-op (archive auto-releases) but prints a verbose stderr line on no-op. (3) The verb taxonomy is fragmented — `release`, `finish`, `archive`, `status` all flavors of "set status, do plumbing as side-effect"; agents have to learn each. Collapse to `dotmd set <status> [<path>]` and the lease lifecycle becomes a side-effect of the transition. |
 
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 31 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 32 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|
