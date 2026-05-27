@@ -10,7 +10,7 @@ dotmd_version: 0.38.0
 
 > Third real-codebase audit (after self-dogfood and gmax-brownfield). Target: `/Users/reoiv/Development/beyond/platform` — 1,182 scanned docs across 8 roots, heavily customized config (custom statuses, per-status flags, surface taxonomy, excludeDirs). Read-only inspection only; one inadvertent doctor mutation reverted (finding 6 below explains the slip). Findings sorted P1 → P3 by impact, in suggested fix order.
 >
-> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2. F18 shipped in 0.36.3 (subsumes F3's mitigation with a universal singular-key deprecation). F4 + F13 shipped in 0.37.0 (doctor dry-run-default + bulk-fix-hint collapse on `check`). F11 + F14 + F17a shipped in 0.38.0 (stale-lease warning in `check`, `shelved` prompt status, opt-in JSONL journal + `dotmd journal` reader). F6 shipped in 0.39.6 (per-type counts; `dotmd stats` groups Status by type — closes the last polish item). **Open:** none. **Features for 0.39.x+:** F15 (`filed: true` filing primitive), F17b (hud reads journal — hold for ~1 week of real journal data), F17c (`die()` self-correcting hints — downstream of F17b), F19 (runlist primitive — needs scoping pass).
+> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2. F18 shipped in 0.36.3 (subsumes F3's mitigation with a universal singular-key deprecation). F4 + F13 shipped in 0.37.0 (doctor dry-run-default + bulk-fix-hint collapse on `check`). F11 + F14 + F17a shipped in 0.38.0 (stale-lease warning in `check`, `shelved` prompt status, opt-in JSONL journal + `dotmd journal` reader). F6 shipped in 0.39.6 (per-type counts; `dotmd stats` groups Status by type — closes the last polish item). **Open:** none. F19 shipped in 0.39.7 (runlist primitive — `dotmd runlist <hub>` and `dotmd runlist next <hub>`; `runlist:` field on plans; back-pointer validator). **Features for 0.39.x+:** F15 (`filed: true` filing primitive), F17b (hud reads journal — hold for ~1 week of real journal data), F17c (`die()` self-correcting hints — downstream of F17b), F20 (`dotmd prompt`/`prompts` alias + `resume`/`use` alias — P3 UX).
 
 ## Verified impact (F1–F3, applied in this session)
 
@@ -326,6 +326,26 @@ F3 covered the noise symptom (warn only on divergence). The underlying duality s
 **Why P2, not P1.** Multi-plan grouping is currently survivable with `queued-after` + prose — slow but possible. Promotes if multiple users hit the same workflow gap.
 
 **Open questions.** Doc type (`plan` with a `runlist:` field vs. dedicated `type: runlist`)? Behavior when a runlist plan ships partial / awaits — does the list pause? Relationship to `parent_plan` (already exists, but unordered)?
+
+### 20. Easier command names — singular/plural aliases and friendlier verbs. — P3 (UX)
+
+**Context.** Captured 2026-05-26 mid-session. Two friction points an agent hits constantly:
+
+- `dotmd prompt` vs. `dotmd prompts` — singular fails ("unknown command"), plural works. Forcing the typist to remember which one is plural is pure friction with no semantic payoff.
+- `dotmd prompts use <file>` is the consume-and-archive verb. `resume` is what a human would actually type when continuing a session. The current name leaks "what it does internally" instead of "what you mean".
+
+**Sketch.** Two cheap aliases:
+
+- `dotmd prompt` → `dotmd prompts` (full alias — every subcommand works under either spelling). Implement at the dispatcher layer in `bin/dotmd.mjs`, not by duplicating help/handlers.
+- `dotmd prompts resume <file>` → alias of `dotmd prompts use <file>`. Both names stay valid; `resume` is the natural-language entry point, `use` keeps the existing precise meaning.
+
+**Generalize?** Worth a quick audit while making the change: are there other obvious singular/plural pairs that would benefit (`plan` vs. `plans`, `module` vs. `modules`)? Today they split intentionally — `dotmd plans` is the list view, `dotmd module <name>` is the deep view; `dotmd plan <slug>` doesn't exist at all. **That split itself may not be worth defending** — the rule "singular = one item, plural = many" sounds principled but in practice means an agent has to remember which spelling each command happens to use. Worth revisiting whether `dotmd plan <slug>` should just work (as an alias for `pickup-card` or `query --slug`?), and whether `dotmd module <name>` should also answer to `dotmd modules <name>`. The agent-first lens: cheap aliases on the typist's side beat semantic purity on the implementer's side. Prompts is the obvious starting point because singular has no current meaning at all → free win, no aliasing collision.
+
+**Sub-item to audit alongside.** Survey every command pair where singular and plural disagree (look at `bin/dotmd.mjs` dispatcher). For each, decide: collapse (full alias both ways), keep-split-with-doc (current behavior, just better surfaced in `--help`), or keep-split-deliberately (semantic mismatch is real, e.g. `bulk` vs. single-target verbs). Output of the audit can land as a follow-up bullet or its own F-item depending on how many real splits exist.
+
+**Why P3.** Pure ergonomics — every workflow has a working spelling today. Cheap fix, high frequency of friction.
+
+**Scope estimate.** ~20-40 lines in `bin/dotmd.mjs` + 2 tests (singular dispatches identically; `resume` and `use` produce identical output on the same fixture).
 
 ## Out-of-scope observations
 

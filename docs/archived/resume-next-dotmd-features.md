@@ -1,8 +1,8 @@
 ---
 type: prompt
-status: pending
+status: archived
 created: 2026-05-27T02:01:22Z
-updated: 2026-05-27T02:01:22Z
+updated: 2026-05-27T02:02:03Z
 dotmd_version: 0.39.6
 context: "Resume Next Dotmd Features"
 related_plans:
