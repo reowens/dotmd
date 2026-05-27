@@ -10,7 +10,7 @@ audience: internal
 parent_plan:
 related_plans:
 related_docs:
-  - ../audit-beyond-platform.md
+  - > ../audit-beyond-platform.md
 summary: Batch six P2/P3 polish findings (F5, F7, F8, F9, F10, F12) from the beyond-platform audit. No JSON/schema breaks. Ships as 0.36.2.
 current_state: Implementation + tests complete (863/863 passing). Pending audit-doc update, plan archive, and `npm version patch`.
 next_step: Append 0.36.2 verified-impact section to docs/audit-beyond-platform.md, then archive this plan and run `npm version patch`.
@@ -41,3 +41,7 @@ F4, F6, F11, F13, F14, F15 — see audit doc and harness plan for rationale.
 ## Refs
 
 - audit: docs/audit-beyond-platform.md
+
+## Closeout
+
+Shipped in 0.36.2 (commit `c814a87`). Six P2/P3 findings landed together — all additive, no schema or behavior breaks. **F5** + **F12** split `dotmd glossary` errors so "section missing" no longer reads as "no entries parsed". **F7** + **F9** added the `results: N of M (use --all)` truncation footer to `dotmd query` and extended it to grouped/sort=status views. **F10** capped `_renderContext` stale-slug tails at 8 plus "… and N more". **F8** added a config-load warning on contradictory rich-status flags (`skipStale: true + staleDays`, `skipWarnings: true + requiresModule`). 863/863 tests pass; +216 lines net across glossary / query / render / config + their test files.

@@ -127,3 +127,7 @@ Warnings
 - audit: docs/audit-beyond-platform.md (F4, F13)
 - prior plan: docs/archived/f18-deprecate-singular-keys.md (shipped 0.36.3 — defined the singular-deprecation warning category F13 now collapses)
 - pattern source for confirmation/apply: `dotmd archive` (already uses `--yes` for terminal confirmation)
+
+## Closeout
+
+Shipped in 0.37.0 (commit `0806f43`). **F4 (safety):** `dotmd doctor` now previews by default — `--apply` (alias `--yes`) opts into writes; explicit `--dry-run` wins over `--apply`. Banner names the flag the user needs so misfires self-correct. Sub-modes (`--statuses`, `--migrate-*`) kept their existing write-by-default contract. **F13 (noise):** new `src/check-collapse.mjs` rolls bulk-fixable warning categories (updated-behind-git, singular-key deprecation, etc.) into one-line remediation hints with the exact fixer command — agents see "43 docs need `dotmd touch --git`" instead of 43 identical lines. `--no-collapse` falls back to the old per-doc shape for scripts. 880/880 tests; +189 / +88 in test/check-collapse + test/doctor.

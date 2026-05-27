@@ -101,3 +101,7 @@ Expect total test count: 863 → ~870.
 
 - audit: docs/audit-beyond-platform.md (F18)
 - prior mitigation: F3 (shipped 0.32.1) — divergence-only warning, now subsumed
+
+## Closeout
+
+Shipped in 0.36.3 (commit `2192c04`). Step 1: validator now emits a deprecation warning on any `module:`/`surface:` use, citing the exact `modules: [...]`/`surfaces: [...]` migration target. Step 2: `dotmd lint --fix` learned `singular-to-plural` — removes the singular key, merges its value(s) into the plural array (or creates the array if absent), de-duplicates. The divergence-only F3 warning is subsumed: any singular usage now warns regardless of agreement with the plural form. 870/870 tests pass; ~120 lines net across `src/validate.mjs` + `src/lint.mjs`.
