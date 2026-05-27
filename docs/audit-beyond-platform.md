@@ -10,7 +10,7 @@ dotmd_version: 0.38.0
 
 > Third real-codebase audit (after self-dogfood and gmax-brownfield). Target: `/Users/reoiv/Development/beyond/platform` — 1,182 scanned docs across 8 roots, heavily customized config (custom statuses, per-status flags, surface taxonomy, excludeDirs). Read-only inspection only; one inadvertent doctor mutation reverted (finding 6 below explains the slip). Findings sorted P1 → P3 by impact, in suggested fix order.
 >
-> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2. F18 shipped in 0.36.3 (subsumes F3's mitigation with a universal singular-key deprecation). F4 + F13 shipped in 0.37.0 (doctor dry-run-default + bulk-fix-hint collapse on `check`). F11 + F14 + F17a shipped in 0.38.0 (stale-lease warning in `check`, `shelved` prompt status, opt-in JSONL journal + `dotmd journal` reader). F6 shipped in 0.39.6 (per-type counts; `dotmd stats` groups Status by type — closes the last polish item). **Open:** none. F19 shipped in 0.39.7 (runlist primitive — `dotmd runlist <hub>` and `dotmd runlist next <hub>`; `runlist:` field on plans; back-pointer validator). F21 shipped in 0.39.8 (reorder `dotmd new <type>` help so `@path`/`-` come before inline, plus agent-tip about PreToolUse hook scanning — sourced from issue #11). **Scoped (active plans) 2026-05-26:** F15 (`docs/plans/filed-primitive.md`), F17b (`docs/plans/hud-reads-journal.md`), F17c (`docs/plans/die-self-correcting-hints.md`), F20 (`docs/plans/command-aliases.md`). Suggested pickup order: F20 (cheapest, decisive) → F17b (1-week-data window has elapsed) → F17c (downstream of F17b) → F15 (biggest, needs `/tmp/` spike).
+> **Status (post-2026-05-26):** F1, F2, F3 shipped in 0.32.1. F16 shipped in 0.36.0. F5, F7, F8, F9, F10, F12 shipped in 0.36.2. F18 shipped in 0.36.3 (subsumes F3's mitigation with a universal singular-key deprecation). F4 + F13 shipped in 0.37.0 (doctor dry-run-default + bulk-fix-hint collapse on `check`). F11 + F14 + F17a shipped in 0.38.0 (stale-lease warning in `check`, `shelved` prompt status, opt-in JSONL journal + `dotmd journal` reader). F6 shipped in 0.39.6 (per-type counts; `dotmd stats` groups Status by type — closes the last polish item). **Open:** none. F19 shipped in 0.39.7 (runlist primitive — `dotmd runlist <hub>` and `dotmd runlist next <hub>`; `runlist:` field on plans; back-pointer validator). F21 shipped in 0.39.8 (reorder `dotmd new <type>` help so `@path`/`-` come before inline, plus agent-tip about PreToolUse hook scanning — sourced from issue #11). **Scoped (active plans) 2026-05-26:** F15 (`docs/plans/filed-primitive.md`), F17b (`docs/plans/hud-reads-journal.md`), F17c (`docs/plans/die-self-correcting-hints.md`), F20 (`docs/plans/command-aliases.md`). Suggested pickup order: F20 (cheapest, decisive) → F17b (1-week-data window has elapsed) → F17c (downstream of F17b) → F15 (biggest, needs `/tmp/` spike). **F22 (filed not yet scoped):** hud uses fast-mode buildIndex + targeted checkIndex — ~6× SessionStart speedup on platform-scale corpora.
 
 ## Verified impact (F1–F3, applied in this session)
 
@@ -346,6 +346,29 @@ F3 covered the noise symptom (warn only on divergence). The underlying duality s
 **Why P3.** Pure ergonomics — every workflow has a working spelling today. Cheap fix, high frequency of friction.
 
 **Scope estimate.** ~20-40 lines in `bin/dotmd.mjs` + 2 tests (singular dispatches identically; `resume` and `use` produce identical output on the same fixture).
+
+### 22. `dotmd hud` runs full-validation `buildIndex` just to get an error count — ~6× slower than needed on the SessionStart path. — P3 (perf)
+
+**Context.** Captured 2026-05-26 while auditing the SessionStart surface for the Beyond platform repo (1,364 indexed docs). `dotmd hud` is wired as the global SessionStart hook, so it fires on every Claude session boot. `src/hud.mjs:82` calls `buildIndex(config)` (full mode) solely to surface `errors > 0 → "✗ N validation errors (run: dotmd check)"`. The full pass runs `enrichRefErrorSuggestions`, `checkIndex`, `checkBidirectionalReferences`, `checkRunlistBackPointers`, `checkGitStaleness`, and `checkClaudeCommands` — but only the ERROR count drives hud's render, and of those passes only `checkIndex` produces errors. The rest produce only warnings, which hud ignores.
+
+**Measured on platform:**
+
+| Mode | Time | Errors | Warnings |
+|---|---|---|---|
+| `buildIndex(config)` (current) | 1013 ms | 0 | 37 |
+| `buildIndex(config, { fast: true })` | 164 ms | 0 | 0 |
+
+That's **~849 ms / 6.2× faster** on the SessionStart hot path. Linear with doc count, so the win grows with the corpus.
+
+**Proposed fix (~10 lines).**
+
+1. Change `src/hud.mjs:82` to `buildIndex(config, { fast: true })`.
+2. After the fast pass, if `config.indexPath` is set, call `checkIndex(transformedDocs, config)` directly and add its errors to the count. This is the ONLY error-producing pass `fast: true` skips — adding it back preserves the invariant that hud's "✗ N validation errors" line matches what `dotmd check` would emit.
+3. Add one regression test asserting hud's error count equals `dotmd check`'s error count across: clean repo, repo with frontmatter errors, repo with index drift.
+
+**Why P3, not P2.** SessionStart is not user-blocking even at 1s; the 5s hook timeout has comfortable headroom. But every dotmd command pays a cost-of-friction multiplier for agents (cumulative across the fleet of Claude sessions), and a 6× speedup on the most-frequent invocation is cheap to ship.
+
+**Scope estimate.** ~10 lines in `src/hud.mjs` + 1 test (~30 lines). Bump 0.39.x patch (perf optimization, zero behavior change for users).
 
 ### 21. Help for `dotmd new <type>` orders inline-body first — agents pattern-match it and trip PreToolUse hooks. — P3 (UX) — SHIPPED 0.39.8
 
