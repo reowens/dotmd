@@ -14,7 +14,7 @@ parent_plan:
 related_plans:
 related_docs:
 current_state: Three release-UX warts surfaced shipping 0.40.0/0.40.1. (1) `npm version` only stages package.json — feature commits, archived plans, and index regen each force their own commit. (2) `dotmd release` is mostly a no-op (archive auto-releases) but prints a verbose stderr line on no-op. (3) The verb taxonomy is fragmented — `release`, `finish`, `archive`, `status` all flavors of "set status, do plumbing as side-effect"; agents have to learn each. Collapse to `dotmd set <status> [<path>]` and the lease lifecycle becomes a side-effect of the transition.
-next_step: Fix C complete. 0.40.3 shipped Fix D (slash-command vocab). 0.41.0 shipped Fix C additive (`dotmd set`). Cleanup tail shipped next: `dotmd finish` dropped, `dotmd status` carries a deprecation pointer to `set`. `archive`/`release` left as idiomatic aliases — no behavior change needed since they already cover their case. Next: Fix A (`dotmd ship`) — wrap the multi-commit release dance + retry-on-network-failure (today's 0.41.0 release surfaced the exact wart). Or Fix B (auto lease-scrub) as a smaller patch.
+next_step: Fix A (minimal cut) shipping as 0.42.0. `dotmd ship [patch|minor|major]` regenerates slash commands at the TARGET version, auto-stages dirty files matching a release allowlist (src/, test/, bin/, docs/, .claude/commands/, package*.json, dotmd.config*.mjs, README.md, CLAUDE.md, .gitignore), commits with an auto-generated message, then runs `npm version <bump>`. Files outside the allowlist (secrets, sibling-session WIP, lock files) are left dirty. Last remaining piece of the plan: Fix B (auto lease-scrub) — smaller patch.
 ---
 
 # Release Ergonomics
