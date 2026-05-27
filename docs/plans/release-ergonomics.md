@@ -14,7 +14,7 @@ parent_plan:
 related_plans:
 related_docs:
 current_state: Three release-UX warts surfaced shipping 0.40.0/0.40.1. (1) `npm version` only stages package.json — feature commits, archived plans, and index regen each force their own commit. (2) `dotmd release` is mostly a no-op (archive auto-releases) but prints a verbose stderr line on no-op. (3) The verb taxonomy is fragmented — `release`, `finish`, `archive`, `status` all flavors of "set status, do plumbing as side-effect"; agents have to learn each. Collapse to `dotmd set <status> [<path>]` and the lease lifecycle becomes a side-effect of the transition.
-next_step: Fix D + Fix C (additive cut) shipped (0.40.3 + 0.41.0-bound). `dotmd set <status> [<path>]` is live with lease-path inference and auto-release on leave-in-session. Tail of Fix C still open: drop `dotmd finish`, deprecate `dotmd status` arg order, alias `archive`/`release` as silent wrappers. Next concrete decision: bundle the cleanup into 0.41.x, or move to Fix A (`dotmd ship`) for the multi-commit release dance.
+next_step: Fix C complete. 0.40.3 shipped Fix D (slash-command vocab). 0.41.0 shipped Fix C additive (`dotmd set`). Cleanup tail shipped next: `dotmd finish` dropped, `dotmd status` carries a deprecation pointer to `set`. `archive`/`release` left as idiomatic aliases — no behavior change needed since they already cover their case. Next: Fix A (`dotmd ship`) — wrap the multi-commit release dance + retry-on-network-failure (today's 0.41.0 release surfaced the exact wart). Or Fix B (auto lease-scrub) as a smaller patch.
 ---
 
 # Release Ergonomics
