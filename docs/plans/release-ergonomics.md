@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: in-session
 created: 2026-05-27T09:17:53Z
-updated: 2026-05-27T09:17:53Z
+updated: 2026-05-27T10:10:37Z
 surfaces:
   - platform
 # modules — real module name(s), or `none` for tooling/infra plans
@@ -14,7 +14,7 @@ parent_plan:
 related_plans:
 related_docs:
 current_state: Three release-UX warts surfaced shipping 0.40.0/0.40.1. (1) `npm version` only stages package.json — feature commits, archived plans, and index regen each force their own commit. (2) `dotmd release` is mostly a no-op (archive auto-releases) but prints a verbose stderr line on no-op. (3) The verb taxonomy is fragmented — `release`, `finish`, `archive`, `status` all flavors of "set status, do plumbing as side-effect"; agents have to learn each. Collapse to `dotmd set <status> [<path>]` and the lease lifecycle becomes a side-effect of the transition.
-next_step: Implement Fix D (slash-command vocab) first — patch-sized, unblocks Fix C discoverability. Pick patch target (0.40.2 likely).
+next_step: Fix D shipped (0.40.3-bound). Next is Fix C — `dotmd set <status> [<path>]` + alias the legacy verbs (release/archive). Minor bump (0.41.0). Decide whether to bundle Fix A (`dotmd ship`) into the same minor or land separately.
 ---
 
 # Release Ergonomics
