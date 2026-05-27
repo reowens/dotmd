@@ -1,8 +1,8 @@
 ---
 type: plan
-status: in-session
+status: archived
 created: 2026-05-27T01:46:07Z
-updated: 2026-05-27T01:46:44Z
+updated: 2026-05-27T01:50:56Z
 surfaces: [cli]
 modules: [stats, index]
 domain: agent-ux
@@ -89,6 +89,7 @@ None — design is mechanical.
 
 ## Version History
 
+- **2026-05-27T01:50:56Z** Archived.
 - **2026-05-27T01:46:44Z** Picked up (active → in-session).
 - **2026-05-27T01:46:07Z** Created.
 
