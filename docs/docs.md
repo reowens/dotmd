@@ -11,10 +11,12 @@
 | [Die Self Correcting Hints](plans/die-self-correcting-hints.md) | Active: No current_state set |
 | [Filed Primitive](plans/filed-primitive.md) | Active: No current_state set |
 | [Hud Reads Journal](plans/hud-reads-journal.md) | Active: No current_state set |
+| [Issue 12 Validator Ux](plans/issue-12-validator-ux.md) | Active: No current_state set |
+| [Issue 13 Archived Prompts Drift](plans/issue-13-archived-prompts-drift.md) | Active: No current_state set |
 
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 34 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 35 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|
