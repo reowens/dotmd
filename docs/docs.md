@@ -8,7 +8,6 @@
 |-----|-----------------|
 | [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Active: No current_state set |
 | [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active: No current_state set |
-| [Filed Primitive](plans/filed-primitive.md) | Active: No current_state set |
 
 ## Archived
 

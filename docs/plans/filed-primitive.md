@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: partial
 created: 2026-05-27T02:39:39Z
-updated: 2026-05-27T02:39:39Z
+updated: 2026-05-28T04:23:07Z
 surfaces:
 modules:
 domain:
@@ -94,4 +94,13 @@ Goals: verify lazy-move semantics feel right; verify ref updates work bidirectio
 
 ## Closeout
 
-(Add when shipped: what landed, any decisions revised mid-impl, bump used.)
+**Shipped 0.48.0 — partial closure.** Landed in narrowed scope:
+
+- `filed: true` (or `filed: '<dir>'`) recognized in `types.<type>.statuses.<status>`. Derived into `config.lifecycle.filedStatuses: Map<statusName, dirName>`.
+- `runStatus` gained `isFiling` / `isUnfiling` branches: file moves into `<docsRoot>/<dirName>/` on entry to a filed status, back to `<docsRoot>/` on exit. Archive transitions still win (they go to `<docsRoot>/<archiveDir>/`).
+- Validator `liveTypeDirsForRoots` now includes filed bucket dirs, so an archive-status doc sitting in a filed bucket still raises the existing forward archive-drift error.
+- 5 tests in `test/filed-primitive.test.mjs` cover in / out / cross-to-archive plus a no-op back-compat case.
+
+**Deferred to a successor plan** (`filed-archive-sugar`, not yet filed): making `archive: true` a derived sugar of `filed + terminal + quiet`. The sugar refactor would force every existing archive test to re-prove byte-identical behavior; chose to keep archive as its own primitive rather than risk that blast radius. Revisit once the dual-primitive seams show pain.
+
+**Decision revised mid-impl:** filing target is `<docsRoot>/<status>/` (parallel to `<docsRoot>/<archiveDir>/`), not `<docsRoot>/<type-dir>/<status>/`. Symmetric un-filing returns to `<docsRoot>/`. Documented here in case a future revisit wants the alternate per-type-dir layout.
