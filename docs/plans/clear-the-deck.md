@@ -14,7 +14,7 @@ related_docs:
 current_state: "Sequences all remaining work as a single runlist hub. Five phased releases drain 2 open issues (#13 P0, #12) and 3 active plans (F15/F17b/F17c)."
 next_step: "Mark in-session, ship phase 1 (issue #13 hotfix → 0.45.2)."
 runlist:
-  - issue-13-archived-prompts-drift.md
+  - ../archived/issue-13-archived-prompts-drift.md
   - issue-12-validator-ux.md
   - die-self-correcting-hints.md
   - hud-reads-journal.md
