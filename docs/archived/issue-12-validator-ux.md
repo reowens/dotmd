@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: archived
 created: 2026-05-28T03:58:35Z
-updated: 2026-05-28T03:58:35Z
+updated: 2026-05-28T04:07:32Z
 surfaces:
 # modules — real module name(s), or `none` for tooling/infra plans
 modules:

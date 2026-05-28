@@ -15,7 +15,7 @@ current_state: "Sequences all remaining work as a single runlist hub. Five phase
 next_step: "Mark in-session, ship phase 1 (issue #13 hotfix → 0.45.2)."
 runlist:
   - ../archived/issue-13-archived-prompts-drift.md
-  - issue-12-validator-ux.md
+  - ../archived/issue-12-validator-ux.md
   - die-self-correcting-hints.md
   - hud-reads-journal.md
   - filed-primitive.md
