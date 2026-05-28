@@ -9,6 +9,7 @@ domain:
 audience: internal
 parent_plan: clear-the-deck
 related_plans:
+  - scaffold-validates-clean.md
 related_docs:
 current_state:
 next_step:
