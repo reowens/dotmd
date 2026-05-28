@@ -9,11 +9,10 @@
 | [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Active: No current_state set |
 | [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active: No current_state set |
 | [Filed Primitive](plans/filed-primitive.md) | Active: No current_state set |
-| [Hud Reads Journal](plans/hud-reads-journal.md) | Active: No current_state set |
 
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 38 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 39 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|

@@ -17,7 +17,7 @@ runlist:
   - ../archived/issue-13-archived-prompts-drift.md
   - ../archived/issue-12-validator-ux.md
   - ../archived/die-self-correcting-hints.md
-  - hud-reads-journal.md
+  - ../archived/hud-reads-journal.md
   - filed-primitive.md
 ---
 

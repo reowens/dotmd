@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: archived
 created: 2026-05-27T02:39:39Z
-updated: 2026-05-27T02:39:39Z
+updated: 2026-05-28T04:16:37Z
 surfaces:
 modules:
 domain:
