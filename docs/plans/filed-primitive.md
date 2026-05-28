@@ -5,7 +5,6 @@ created: 2026-05-27T02:39:39Z
 updated: 2026-05-28T04:23:07Z
 surfaces:
 modules:
-  - none
 domain:
 audience: internal
 parent_plan: clear-the-deck
