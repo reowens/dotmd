@@ -11,7 +11,7 @@ domain:
 audience: internal
 parent_plan:
 related_plans:
-  - ../plans/die-self-correcting-hints.md
+  - die-self-correcting-hints.md
 related_docs:
 current_state: Issue #12 reports 3 first-failure validator traps (unknown surface, missing modules, over-cap current_state) that burn agent retries. This session hit a 4th while scaffolding this plan — `dotmd new @body.md` embeds the body file's frontmatter as literal body. None covered by `lint --fix`. Sibling to die-self-correcting-hints (repeat-failure); attacks first-failure scaffold ergonomics.
 next_step: Confirm scope (all 3 asks vs. subset) and pick bump target.
