@@ -18,7 +18,7 @@ runlist:
   - issue-12-validator-ux.md
   - die-self-correcting-hints.md
   - hud-reads-journal.md
-  - ../plans/filed-primitive.md
+  - filed-primitive.md
 ---
 
 # Clear The Deck

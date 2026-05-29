@@ -1,8 +1,8 @@
 ---
 type: plan
-status: partial
+status: archived
 created: 2026-05-27T02:39:39Z
-updated: 2026-05-28T04:23:07Z
+updated: 2026-05-29T02:02:26Z
 surfaces:
 modules:
 domain:
