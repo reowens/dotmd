@@ -4,10 +4,10 @@
 
 ## Active
 
-| Doc | Status Snapshot |
-|-----|-----------------|
-| [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Active: No current_state set |
-| [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active: No current_state set |
+| Doc | Status |
+|-----|--------|
+| [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Active |
+| [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active |
 
 ## Archived
 
