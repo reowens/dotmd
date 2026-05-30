@@ -2,12 +2,12 @@
 
 <!-- GENERATED:dotmd:start -->
 
-## Active
+## Reference
 
 | Doc | Status |
 |-----|--------|
-| [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Active |
-| [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Active |
+| [Agent UX Audit — 2026-05-24](agent-ux-audit.md) | Reference |
+| [dotmd audit against Beyond platform — 2026-05-24](audit-beyond-platform.md) | Reference |
 
 ## Archived
 

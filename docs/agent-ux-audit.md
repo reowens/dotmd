@@ -1,15 +1,15 @@
 ---
 type: doc
-status: active
+status: reference
 created: 2026-05-24T22:33:02Z
-updated: 2026-05-25
+updated: 2026-05-29
 modules: [cli, validate, index, lifecycle]
 surfaces: [cli]
 domain: agent-ux
 audience: internal
 related_plans:
 related_docs: "> docs/audit-beyond-platform.md"
-dotmd_version: 0.32.1
+dotmd_version: 0.50.0
 ---
 
 # Agent UX Audit — 2026-05-24
@@ -55,7 +55,7 @@ Wrote `related_docs: audit-beyond-platform.md` in a plan's frontmatter. `dotmd c
 
 **Proposed fix.** In `src/validate.mjs` ref-resolution errors (and lifecycle/graph by extension), when a ref doesn't resolve, append: `Did you mean: <top-3 basename or substring matches from the index>?` Use simple Levenshtein or basename-substring; ranking quality matters less than just surfacing candidates. The same fix applies to glossary lookups, `--module` filters on unknown modules, and `dotmd module <name>` (the F16 plan already specifies this hint shape for the new `module` verb — generalize).
 
-### A4. Bidirectional-reciprocity warning fires for upstream-parent refs. — P2 (noise that an agent can't cleanly fix) — 🟡 plan spawned (`docs/plans/a4-unidirectional-refs.md`, design call settled, targeting 0.35.0)
+### A4. Bidirectional-reciprocity warning fires for upstream-parent refs. — P2 (noise that an agent can't cleanly fix) — ✅ shipped 0.35.0
 
 When a plan adds `related_docs: docs/audit-beyond-platform.md` pointing at a parent audit doc, `dotmd check` warns: `references X in related_plans/related_docs, but that doc does not reference back`. To resolve, the agent must edit the parent doc to add a back-ref enumerating every spawned plan.
 
@@ -118,12 +118,56 @@ A1+A2+A3 shipped as 0.34.0 (not 0.33.0 — 0.33.0 was claimed by the `/baton` + 
 
 The Meta-pattern sweep below remains open as a separate follow-up.
 
+## Post-ship update — 2026-05-29
+
+A4 shipped as **0.35.0** (per-ref `>` prefix marks a single ref one-way; reciprocity check skipped for that entry while the field stays bidirectional everywhere else). This doc's own `related_docs: "> docs/audit-beyond-platform.md"` is now using that convention. With A4 landed, **every concrete finding (A1–A5) in this audit has shipped** — the doc moves to `status: reference` as a historical record.
+
+The Meta-pattern sweep was executed 2026-05-29 (results below) — it's now complete and surfaced 6 new findings (M1–M6).
+
+## Meta-pattern sweep results — 2026-05-29 (v0.50.0)
+
+Ran all five anti-pattern dimensions across `src/` + `bin/` (one investigator per dimension, findings verified against source). Dimension D4 (templates resist body) came back **clean** — all built-in types accept body across all input modes and the 0.49.3 non-body guard is complete and fails safe. The other four surfaced six findings:
+
+### M1. `dotmd check` footer prescribes bare `dotmd doctor`, which writes nothing. — P1 (A1 recurrence) — ✅ shipped 0.50.1
+
+`src/render.mjs:496` — the check summary footer (the line every agent reads after a validation run) says *"`dotmd doctor` auto-fixes supported issues."* But since F4/0.37.0, bare `dotmd doctor` runs in **preview/dry-run mode** (`doctorDryRun = explicitDryRun || !explicitApply`, `bin/dotmd.mjs:1327`) and mutates nothing. An agent runs `dotmd doctor`, re-runs `check`, sees identical issues → loops. **This is exactly the A1 anti-pattern** ("Run X where X doesn't fix") in a new spot. **Fix:** the prescription must read `dotmd doctor --apply`.
+
+### M2. Generated agent briefing calls bare `dotmd doctor` the "auto-fix everything" verb. — P1 (A1 recurrence, fleet-wide) — ✅ shipped 0.50.1
+
+`src/claude-commands.mjs:136` injects `- \`dotmd doctor\` — auto-fix everything in one pass (refs, lint, dates, index)` into every repo's generated `.claude/commands/*.md`. Same root cause as M1, but worse blast radius: it ships into every agent's command briefing. **Fix:** `dotmd doctor --apply` (or note "preview by default; `--apply` writes"). The standalone `--help` and command catalog already disclose `--apply` correctly — only these two agent-facing remediation strings drop the flag.
+
+### M3. `dotmd statuses add/set/remove/migrate` silently aborts (exit 0) for non-interactive agents. — P2 (mutation-default footgun)
+
+`src/statuses.mjs` `confirm()` returns `false` whenever stdin isn't a TTY (`:616`), and each gate (`:202,290,359,503`) prints `Aborted.` and returns **exit 0** without `--yes`. An agent running a `statuses` config edit sees a success-looking diff, no write, and a clean exit — it must rediscover that `--yes` is mandatory non-interactively. Lowest-severity of the mutation commands (infrequent, non-destructive, diff shown first; all 21 other mutation commands have sensible defaults). **Fix:** when non-interactive without `--yes`, `die()` with a non-zero exit and a clear message, rather than a silent zero-exit abort.
+
+### M4. `File not found: <input>` errors don't suggest the near-miss doc. — P2 (A3 gap cluster)
+
+A3 added did-you-mean suggestions to surface/module/status/glossary/command errors — all verified still present. But the `File not found: <input>` family (~16 emit sites: `use.mjs:26`, `lifecycle.mjs:337/607/789/…`, `summary.mjs`, `deps.mjs`, `diff.mjs`, `rename.mjs`, `export.mjs`, etc.) states the failure with no candidate hint, even though the index + `suggestCandidates` (already used everywhere else) are cheaply available. **Fix:** one shared `util.mjs` helper (`dieFileNotFound(input, config)`) that appends `Did you mean: <basename matches>?`, applied across the cluster.
+
+### M5. Runlist back-pointer warning ignores the `>` one-way prefix. — P2 (A4 twin, cheap) — ✅ shipped 0.50.1
+
+`checkRunlistBackPointers` (`src/validate.mjs:420-450`) warns a child "appears in runlist of `<hub>` but `parent_plan:` does not point back." This is the structural twin of the A4 bidirectional case — one doc declares the edge, the other gets nagged to reciprocate. The `>` one-way prefix IS parsed for `runlist` entries (it's a reference field, so `refFieldDirections` is populated), but **only `checkBidirectionalReferences` consults it** (`validate.mjs:379-390`); the runlist check reads `hub.refFields?.runlist` directly and never checks direction. **Fix (cheapest):** skip the back-pointer warning when `hub.refFieldDirections.runlist[i] === 'one-way'` — reuses the existing A4 mechanism, no new config.
+
+### M6. Git-staleness warning has no per-doc pin/opt-out. — P3
+
+`checkGitStaleness` (`src/validate.mjs:469`) warns when frontmatter `updated:` is behind git history — git-driven state, and it re-fires whenever any tool touches the file. It's same-doc fixable (`dotmd touch --git` / `doctor` auto-syncs) and gated by `skipStaleFor`, so lower severity, but there's no way to mark a doc's `updated:` as intentionally pinned. **Fix (optional):** a per-doc `updated_pinned: true` (or reuse `skipStale`) that suppresses git-staleness for that doc.
+
+### Sweep verdict
+
+The meta-pattern is mostly closed — D4 clean, and A1/A3/A4 fixes verified holding. The standout is **M1+M2: the A1 "Run X that doesn't fix" footgun recurred for `dotmd doctor`** after F4 made it preview-by-default but the remediation strings weren't updated.
+
+**Shipped 0.50.1:** M1 (`render.mjs` check footer → `dotmd doctor --apply`), M2 (`claude-commands.mjs` generated briefing → `--apply`), and M5 (`checkRunlistBackPointers` now honors the `>` one-way prefix, reusing the A4 mechanism). Regression tests added in `test/render.test.mjs`, `test/claude-commands.test.mjs`, `test/runlist.test.mjs`.
+
+**Still open:** M4 (`File not found:` did-you-mean helper, P2), M3 (`dotmd statuses` non-interactive abort, P2), M6 (git-staleness per-doc pin, P3). Each is a candidate for a fresh `plan` when prioritized.
+
 ## Version History
 
+- **2026-05-29** Meta-pattern sweep executed — 6 new findings (M1–M6); D4 clean. M1+M2 are the A1 "Run X that doesn't fix" footgun recurring for `dotmd doctor` (preview-by-default since F4, but remediation strings still say bare `dotmd doctor`).
+- **2026-05-29** Post-ship update: A4 shipped as 0.35.0; A1–A5 all shipped; doc moved to `status: reference`.
 - **2026-05-25** Post-ship update: A1+A2+A3 shipped as 0.34.0; A4 spawned as its own plan; A5 closed out by A2.
 - **2026-05-24T22:33:02Z** Created. Five findings from a single plan-creation flow during routine work; user reframed dotmd's primary audience as Claude (agents), making this audit class first-priority over data-corpus audits.
 
 ## Related Documentation
 
-- [`audit-beyond-platform.md`](audit-beyond-platform.md) — sibling audit, data-corpus shape (Beyond's 1,182-doc repo with custom config). F1–F3 shipped as 0.32.1; F4–F16 pending.
+- [`audit-beyond-platform.md`](audit-beyond-platform.md) — sibling audit, data-corpus shape (Beyond's 1,182-doc repo with custom config). All findings (F1–F22) have shipped as of 0.50.0; that doc is now `status: reference`.
 - [`plans/modules-dashboard.md`](plans/modules-dashboard.md) — F16 plan from sibling audit; the flow that surfaced these agent-UX findings.
