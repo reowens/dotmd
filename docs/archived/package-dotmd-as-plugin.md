@@ -1,8 +1,8 @@
 ---
 type: plan
-status: in-session
+status: archived
 created: 2026-06-03T00:46:37Z
-updated: 2026-06-03T05:23:10Z
+updated: 2026-06-03T05:44:30Z
 surfaces:
 modules:
 domain:
