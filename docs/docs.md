@@ -2,12 +2,6 @@
 
 <!-- GENERATED:dotmd:start -->
 
-## Active
-
-| Doc | Status |
-|-----|--------|
-| [Plugin-Primary Ergonomics](plans/plugin-primary-ergonomics.md) | Active |
-
 ## Reference
 
 | Doc | Status |
@@ -17,7 +11,7 @@
 
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 43 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 45 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|

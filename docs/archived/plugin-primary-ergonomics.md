@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: archived
 created: 2026-06-03T07:02:04Z
-updated: 2026-06-03T07:02:04Z
+updated: 2026-06-03T07:28:47Z
 surfaces:
 modules:
 domain:
@@ -76,6 +76,28 @@ clear multi-match error when ambiguous. Add a lifecycle test.
 - `dotmd doctor` helper to migrate existing archived prompts into the nested
   `<typeDir>/archived/` layout (the manual `git mv` done by hand this session).
 - CLAUDE.md ⇄ SKILL.md drift guard.
+
+## Closeout
+
+Both items shipped this session; full suite green (1042 tests).
+
+- **Item 1 — missing-binary hint.** Settled the (a)/(b) design question via the
+  `claude-code-guide` agent: confirmed `${CLAUDE_PLUGIN_ROOT}` is exported into
+  the env for all hook types, SessionStart stdout becomes session context, and a
+  PreToolUse hook that exits 0 with no output is a clean no-op (never blocks).
+  Went with (b): `plugins/dotmd/bin/dotmd-hook` (POSIX sh) — `--hint` (passed
+  only by SessionStart) prints one install line when `dotmd` is off PATH so the
+  hint surfaces exactly once per session; SubagentStart/CwdChanged/guard stay
+  silent. `hooks.json` invokes it as `sh "${CLAUDE_PLUGIN_ROOT}/bin/dotmd-hook"
+  …` (the `sh` prefix avoids depending on the exec bit surviving distribution).
+  Covered by `test/plugin-hook.test.mjs`.
+- **Item 2 — `dotmd archive <slug>`.** Added `resolveArchiveTarget` in
+  `src/lifecycle.mjs` (exact path → `+.md` → recursive basename match under doc
+  roots; ambiguous basename dies with the candidate list), wired into
+  `runArchive`. Help text updated. Covered in `test/lifecycle.test.mjs`
+  ("archive resolves bare slugs").
+- **Release:** one `npm version minor` covers both (Item 1 bumps the plugin tree
+  → needs `claude plugin update` to take effect downstream; Item 2 is pure CLI).
 
 ## Notes / gotchas
 
