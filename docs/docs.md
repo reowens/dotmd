@@ -2,6 +2,12 @@
 
 <!-- GENERATED:dotmd:start -->
 
+## Active
+
+| Doc | Status |
+|-----|--------|
+| [Plugin-Primary Ergonomics](plans/plugin-primary-ergonomics.md) | Active |
+
 ## Reference
 
 | Doc | Status |
