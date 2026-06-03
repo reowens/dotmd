@@ -1,8 +1,8 @@
 ---
 type: plan
-status: partial
+status: in-session
 created: 2026-06-03T00:46:37Z
-updated: 2026-06-03T01:04:17Z
+updated: 2026-06-03T05:23:10Z
 surfaces:
 modules:
 domain:
@@ -11,8 +11,8 @@ parent_plan:
 related_plans:
 related_docs:
 summary: Package dotmd as a Claude Code plugin (marketplace + bundled hooks + canonical SKILL.md), replacing fragile per-repo .claude/commands scaffolding and hand-configured global hooks so guidance and guardrails travel to every repo and every subagent.
-current_state: Fully scoped — plugin mechanics validated against current Claude Code docs (claude-code-guide), decisions locked (monorepo layout, PATH binary, GitHub marketplace), concrete file tree + 5 phases defined. Quick wins already landed in-CLI and wired into global settings by hand. Plugin packaging not yet started.
-next_step: Scaffold the plugin (marketplace.json, plugin.json, hooks.json, SKILL.md) and test-install from a local marketplace dir.
+current_state: All five phases shipped. Plugin live (marketplace + plugins/dotmd/ with hooks.json, plugin.json, SKILL.md, commands/{plans,docs,prompts,baton}.md); hooks cut over from global settings. Phase 4 done — per-repo `.claude/commands` scaffolding retired: `src/claude-commands.mjs` is now removal-only (banner-gated cleanup of dotmd-generated files, hand-authored ones untouched), `dotmd hud`/`doctor` sweep stale files, `init` recommends the plugin instead of scaffolding, `/baton` ported into the plugin. Full suite green (1029).
+next_step: Release (npm version) so the retirement + plugin /baton ship; existing repos auto-clean their generated command files on the next `dotmd hud`. Then verify `claude plugin update` surfaces /baton.
 ---
 
 # Package Dotmd As Plugin
@@ -102,7 +102,7 @@ Body owns: the order of operations (briefing → use → set → archive), the c
 - **Atomic cutover done**: registered the `dotmd` directory marketplace + `"dotmd@dotmd": true` in `~/.claude/settings.json`, and removed the hand-configured dotmd SessionStart/SubagentStart/PreToolUse hooks (kept `block-git-stash`). No double-priming.
 - **Docs**: README "Claude Code plugin (recommended)" section; CLAUDE.md plugin note.
 
-**Remaining: Phase 4 (retire per-repo scaffolding).** Deferred deliberately — `src/claude-commands.mjs` is woven through init/hud/ship/doctor with ~20 tests, and `test/hud.test.mjs` asserts hud self-heals `.claude/commands`. Ripping it out risks existing repos that committed those files. Do it as its own change: no-op the scaffolders behind a deprecation, update the hud test, have `init` print plugin-install guidance. Until then the per-repo commands coexist as harmless redundant guidance.
+**Phase 4 (retire per-repo scaffolding) — SHIPPED.** `src/claude-commands.mjs` was rewritten from a generator into a removal-only module: `removeGeneratedSlashCommands(cwd)` deletes only banner-stamped (`<!-- dotmd-generated -->`) command files and never touches hand-authored ones (module-*.md, domain-*.md). Wiring updated at all call sites — `dotmd hud` (SessionStart) and `dotmd doctor` now *sweep* stale generated files instead of regenerating them; `dotmd ship` no longer regenerates; `dotmd init` recommends installing the plugin (`/plugin install dotmd@dotmd`) and cleans any leftover generated files instead of scaffolding. The generator + status-vocab helpers were deleted. Tests rewritten (`claude-commands.test.mjs` now covers removal/banner-gating, including a regression test for a banner sitting past 1KB of vocab frontmatter — caught against the real platform repo where plans.md's long description hid the marker). `/baton` (the only generated command without a plugin equivalent) was ported to `plugins/dotmd/commands/baton.md` so the handoff shortcut travels via the plugin; auto-clean then removes the orphaned per-repo copies with zero capability loss. Full suite green (1029).
 
 ## Already landed (quick wins — context for this plan)
 
