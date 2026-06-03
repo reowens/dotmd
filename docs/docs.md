@@ -2,12 +2,6 @@
 
 <!-- GENERATED:dotmd:start -->
 
-## Planned
-
-| Doc | Status |
-|-----|--------|
-| [Package Dotmd As Plugin](plans/package-dotmd-as-plugin.md) | Planned |
-
 ## Reference
 
 | Doc | Status |

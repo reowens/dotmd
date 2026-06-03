@@ -1,8 +1,8 @@
 ---
 type: plan
-status: planned
+status: partial
 created: 2026-06-03T00:46:37Z
-updated: 2026-06-03T00:46:42Z
+updated: 2026-06-03T01:04:17Z
 surfaces:
 modules:
 domain:
@@ -11,7 +11,7 @@ parent_plan:
 related_plans:
 related_docs:
 summary: Package dotmd as a Claude Code plugin (marketplace + bundled hooks + canonical SKILL.md), replacing fragile per-repo .claude/commands scaffolding and hand-configured global hooks so guidance and guardrails travel to every repo and every subagent.
-current_state: Quick wins landed in-CLI (dotmd guard, hud --subagent, misuse log, new-prompt guidance) and are wired into global settings by hand. Plugin packaging not yet started.
+current_state: Fully scoped — plugin mechanics validated against current Claude Code docs (claude-code-guide), decisions locked (monorepo layout, PATH binary, GitHub marketplace), concrete file tree + 5 phases defined. Quick wins already landed in-CLI and wired into global settings by hand. Plugin packaging not yet started.
 next_step: Scaffold the plugin (marketplace.json, plugin.json, hooks.json, SKILL.md) and test-install from a local marketplace dir.
 ---
 
@@ -39,26 +39,53 @@ gmax is stateless-global (semantic search works anywhere). dotmd's vocabulary (t
 
 **Resolution — hybrid:** the plugin ships the *static* layer (workflow, order-of-operations, guardrails); the *dynamic* per-project status vocab keeps being injected at runtime by `dotmd hud` (it already reads config and emits the vocab clause). Static skill + dynamic hook = full picture, no per-repo file generation.
 
-## What ships
+## Validated plugin mechanics (claude-code-guide, 2026-06-02)
 
-- `.claude-plugin/marketplace.json` — marketplace manifest (name `dotmd`, owner, version, points at `plugins/dotmd`).
-- `plugins/dotmd/.claude-plugin/plugin.json` — plugin manifest.
-- `plugins/dotmd/hooks.json` — bundled hooks (the heart of the migration):
-  - `SessionStart` → `dotmd hud` (verb primer + dynamic project vocab)
-  - `SubagentStart` → `dotmd hud --subagent` (compact primer + guardrails)
-  - `PreToolUse` matcher `Bash|Read|Edit|Write|MultiEdit` → `dotmd guard` (intercept + log wrong-moves)
-  - (consider) `CwdChanged` → re-prime when the session changes repo, like gmax's cwd-changed.js
-- `plugins/dotmd/skills/dotmd/SKILL.md` — canonical, static workflow skill: the order of operations (briefing → use → set → archive), the closure-status decision tree, the "don't cat/commit/hand-edit managed docs" rules. One source of truth, replacing the two generated `.claude/commands` files.
-- (optional) `plugins/dotmd/commands/*.md` — keep `plans`/`docs` as plugin slash commands if explicit `/plans` `/docs` invocation is still wanted.
-- (optional) a bundled dotmd-aware Explore agent.
+Every load-bearing assumption was confirmed against current Claude Code docs:
 
-## Distribution question (decide early)
+- **Hook events all fire for plugin-bundled hooks**: `SessionStart`, `SubagentStart`, `SessionEnd`, `PreToolUse`, and `CwdChanged`. So both the subagent primer and the optional cwd re-prime are supported and idiomatic (gmax uses both).
+- **SessionStart/SubagentStart stdout is auto-injected as `additionalContext`** — plain text, no JSON wrapper. So `dotmd hud` / `dotmd hud --subagent` printing a few lines Just Works as a plugin hook; no output changes needed.
+- **PreToolUse output contract is exactly what the shipped guard already emits**: `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"|"allow"|"ask"|"defer","permissionDecisionReason":"…","additionalContext":"…"}}`. Exit 0 → stdout JSON parsed. `additionalContext` caps at 10k chars. The warn rules (omit `permissionDecision`, set `additionalContext`) behave as `defer` + context — correct.
+- **Matcher `Bash|Read|Edit|Write|MultiEdit`** is valid (pipe-separated exact list; regex only kicks in for non-`[A-Za-z0-9_|]` chars). The global-settings wiring is already correct.
+- **`hooks.json` is NOT auto-discovered** — `plugin.json` must declare `"hooks": "./hooks.json"`. `skills/`, `commands/`, `agents/` auto-discover from default dirs.
+- **Calling `dotmd` on PATH from hooks is idiomatic** (gmax calls `gmax` the same way); `npm i -g dotmd-cli` puts it there. `${CLAUDE_PLUGIN_ROOT}` bundling is the alternative for zero-install audiences.
+- **Distribution = marketplace**, not npm-standalone. npm is only a *source within* a marketplace. Lowest-friction: a GitHub marketplace → `/plugin marketplace add reowens/dotmd` → `/plugin install dotmd@reowens`.
+- **SKILL.md is the right vehicle** for agent-facing workflow guidance (auto-surfaced via its `description` frontmatter); slash commands are user-typed only.
 
-The plugin's hooks call the `dotmd` binary, which is an **npm** package (`dotmd-cli`), not bundled in the plugin. Two options:
-- **A — assume `dotmd` on PATH** (like gmax assumes `gmax`). Plugin docs require `npm i -g dotmd-cli`. Simplest; matches gmax. A SessionStart preflight can detect a missing binary and print install guidance.
-- **B — bundle the CLI** under `${CLAUDE_PLUGIN_ROOT}` and call it via an absolute path. Heavier, but zero external install.
+## Decision: monorepo, PATH-binary, marketplace-distributed
 
-Recommend **A** for parity with gmax and minimal moving parts.
+- **Layout — monorepo (gmax pattern).** Add the plugin into *this* repo: `.claude-plugin/marketplace.json` at root + `plugins/dotmd/`. CLI and plugin version and ship together; one source of truth. (Rejected: a separate `dotmd-plugin` repo — extra sync surface for no benefit.)
+- **Binary — PATH, not bundled.** Hooks call `dotmd` (installed via `npm i -g dotmd-cli`), matching gmax. A SessionStart preflight already exists in spirit (`dotmd hud` no-ops cleanly); add a missing-binary install hint if `dotmd` isn't found.
+- **Distribution — GitHub marketplace** off this repo; local-dir marketplace via `extraKnownMarketplaces` for dev (exactly how gmax is wired today).
+
+## What ships (concrete tree)
+
+```
+dotmd/                                  # this repo (monorepo)
+├── .claude-plugin/
+│   └── marketplace.json                # { name:"dotmd", owner, plugins:[{ name:"dotmd", source:"./plugins/dotmd" }] }
+└── plugins/dotmd/
+    ├── .claude-plugin/plugin.json      # { name:"dotmd", version, description, hooks:"./hooks.json", author, repository }
+    ├── hooks.json                      # the heart of the migration (below)
+    ├── skills/dotmd/SKILL.md           # canonical agent-facing workflow (frontmatter: name + description)
+    └── commands/                       # optional: plans.md, docs.md as user-typed /plans /docs
+```
+
+`hooks.json` (all commands call the PATH binary):
+- `SessionStart` → `dotmd hud` — verb primer + dynamic project vocab (auto-injected as context)
+- `SubagentStart` → `dotmd hud --subagent` — compact primer + guardrails
+- `PreToolUse` matcher `Bash|Read|Edit|Write|MultiEdit` → `dotmd guard` — intercept + log wrong-moves
+- (optional) `CwdChanged` → `dotmd hud --subagent` — re-prime when the session changes repo
+
+`SKILL.md` frontmatter shape (matches gmax):
+```
+---
+name: dotmd
+description: Manage this repo's plans/docs/prompts with dotmd. Use when the user asks what's on the plate, references a plan/doc/prompt, queues work, or wants to start/transition/close one. Order of ops: briefing → use → set → archive.
+allowed-tools: "Bash(dotmd:*), Read"
+---
+```
+Body owns: the order of operations (briefing → use → set → archive), the closure-status decision tree, and the don't-cat/commit/hand-edit guardrails — one source of truth replacing the two generated `.claude/commands` files.
 
 ## Retirement / migration
 
@@ -66,6 +93,16 @@ Recommend **A** for parity with gmax and minimal moving parts.
 - Remove the dependency on hand-configured global hooks (document the plugin install instead). Leave `dotmd hud` / `dotmd guard` as the stable hook entrypoints — they don't change.
 - Update `dotmd init` to print "install the dotmd plugin" guidance instead of writing `.claude/commands`.
 - README + CLAUDE.md: document plugin install as the recommended path.
+
+## Shipped (this push — phases 1–3, 5)
+
+- **Plugin scaffolded** (monorepo): `.claude-plugin/marketplace.json` + `plugins/dotmd/{.claude-plugin/plugin.json, hooks.json, skills/dotmd/SKILL.md, commands/{plans,docs}.md}`. All manifests validated.
+- **hooks.json** wires `SessionStart → dotmd hud`, `SubagentStart`/`CwdChanged → dotmd hud --subagent`, `PreToolUse (Bash|Read|Edit|Write|MultiEdit) → dotmd guard` — all via the PATH binary.
+- **SKILL.md** is the canonical agent-facing workflow (order of ops, closure decision tree, guardrails).
+- **Atomic cutover done**: registered the `dotmd` directory marketplace + `"dotmd@dotmd": true` in `~/.claude/settings.json`, and removed the hand-configured dotmd SessionStart/SubagentStart/PreToolUse hooks (kept `block-git-stash`). No double-priming.
+- **Docs**: README "Claude Code plugin (recommended)" section; CLAUDE.md plugin note.
+
+**Remaining: Phase 4 (retire per-repo scaffolding).** Deferred deliberately — `src/claude-commands.mjs` is woven through init/hud/ship/doctor with ~20 tests, and `test/hud.test.mjs` asserts hud self-heals `.claude/commands`. Ripping it out risks existing repos that committed those files. Do it as its own change: no-op the scaffolders behind a deprecation, update the hud test, have `init` print plugin-install guidance. Until then the per-repo commands coexist as harmless redundant guidance.
 
 ## Already landed (quick wins — context for this plan)
 
@@ -77,14 +114,21 @@ Recommend **A** for parity with gmax and minimal moving parts.
 
 ## Open questions / risks
 
-- Guard aggressiveness: `commit-prompt` denies; the rest warn. Watch the misuse log for false positives before promoting any warn → deny.
-- `SubagentStart` / `CwdChanged` hook-event support: confirm current Claude Code fires them for plugin-bundled hooks.
-- Keeping CLAUDE.md (project) and the plugin SKILL.md from drifting — pick one as canonical; the SKILL.md should own the agent-facing workflow.
+- **Resolved** (claude-code-guide): hook-event support, output contract, matcher syntax, manifest shape, distribution — see "Validated plugin mechanics."
+- **Double-priming during the cut-over.** While both the bundled plugin hooks AND the hand-configured global hooks are active, SessionStart/guard fire twice. Sequence Phase 3 to remove the global-settings dotmd hooks in the same change that enables the plugin.
+- **Guard aggressiveness.** `commit-prompt` denies; the rest warn. Watch `dotmd misuse --by-rule` for false positives before promoting any warn → deny.
+- **CLAUDE.md vs SKILL.md drift.** Pick one canonical: the SKILL.md owns the *agent-facing* workflow; CLAUDE.md links to it rather than duplicating. Decide whether `init` writes a project CLAUDE.md stub that defers to the skill.
+- **Missing-binary UX.** If a user enables the plugin without `npm i -g dotmd-cli`, hooks silently no-op. Add a one-line install hint when `dotmd` isn't on PATH.
 
 ## Phases
 
-1. **Scaffold the plugin** — marketplace.json, plugin.json, hooks.json, SKILL.md. Test-install from a local marketplace dir (as gmax does via `extraKnownMarketplaces`).
-2. **Author the canonical SKILL.md** — port the workflow/order-of-operations/decision-tree from CLAUDE.md + the generated command bodies; bake in the guardrail rules.
-3. **Cut over hooks** — move SessionStart/SubagentStart/PreToolUse from global settings into bundled hooks.json; verify subagents and a fresh repo both get primed.
-4. **Retire per-repo scaffolding** — deprecate claude-commands.mjs, update `dotmd init`, add the deprecation shim.
-5. **Docs + release** — README/CLAUDE.md plugin-install guidance; publish marketplace.
+1. **Scaffold the plugin** — `.claude-plugin/marketplace.json` + `plugins/dotmd/{.claude-plugin/plugin.json, hooks.json}`. Wire a local-dir marketplace via `extraKnownMarketplaces` (mirroring gmax) and `/plugin install dotmd@…`. Verify SessionStart + guard fire from the plugin.
+2. **Author the canonical SKILL.md** — port the order-of-operations + closure-status decision tree from CLAUDE.md and the generated command bodies; bake in the guardrail rules; confirm it surfaces in the available-skills listing via its `description`.
+3. **Cut over hooks (atomic)** — in one change: enable the plugin's hooks AND remove the dotmd SessionStart/SubagentStart/PreToolUse entries from global settings (avoids double-priming). Verify a subagent and a fresh repo both get primed.
+4. **Retire per-repo scaffolding** — deprecate `src/claude-commands.mjs` (`scaffoldClaudeCommands` / `refreshStaleSlashCommands`) with a one-release no-op shim; stop `dotmd init` / `dotmd hud` from writing `.claude/commands`; have `init` print plugin-install guidance instead.
+5. **Docs + release** — README + CLAUDE.md document plugin install as the recommended path; publish the GitHub marketplace; cut the release that ships `plugins/dotmd/`.
+
+## References
+
+- Claude Code plugin docs: plugins-reference, hooks, plugins, plugin-marketplaces (code.claude.com/docs).
+- Reference implementation: `grepmax` plugin (`/Users/reoiv/Development/beyond/tools/gmax/plugins/grepmax`) — `plugin.json` with `"hooks":"./hooks.json"`, `hooks.json` (SessionStart/SubagentStart/CwdChanged/PreToolUse via `${CLAUDE_PLUGIN_ROOT}`), `skills/grepmax/SKILL.md`, `commands/*.md`, `agents/semantic-explore.md`.
