@@ -15,7 +15,7 @@ runlist:
   - ../archived/b2-exit-codes-and-briefing-wording.md
   - ../archived/b3-set-note-worklog.md
   - ../archived/b4-body-keyword-search.md
-  - b5-guard-sed-gap-misuse-recap.md
+  - ../archived/b5-guard-sed-gap-misuse-recap.md
 current_state: Runlist hub for the 2026-06-10 round-B agent-UX findings; all five children drafted and queued.
 next_step: dotmd runlist next docs/plans/agent-ux-round-b.md (starts b1).
 ---
