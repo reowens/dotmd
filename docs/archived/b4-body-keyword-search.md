@@ -1,8 +1,8 @@
 ---
 type: plan
-status: planned
+status: archived
 created: 2026-06-10T07:45:49Z
-updated: 2026-06-10T07:47:01Z
+updated: 2026-06-10T09:37:15Z
 surfaces: [cli]
 modules: [cli, query]
 domain: agent-ux
@@ -37,8 +37,16 @@ next_step: Add --body lazy body scan + excerpts to query.
 
 ## Phases
 
-### Phase 1 — --body flag ⬜
+### Phase 1 — --body flag ✅
 Lazy body scan + excerpt extraction in `src/query.mjs`; respect `--type`/`--status`/`--limit` composition. Tests: body-only match found, frontmatter-only still works, excerpt rendering, json shape.
 
-### Phase 2 — ergonomic alias ⬜
+Shipped: `--body` defers the keyword filter until after all frontmatter filters, so bodies are only read for surviving candidates (frontmatter matches keep their spot with no file read at all). Hits carry up to 2 `{ line, text }` excerpts — line numbers are file-absolute so they feed straight into a Read offset; long lines are windowed to 120 chars around the needle. `--body` without `--keyword` errors with guidance.
+
+### Phase 2 — ergonomic alias ✅
 `dotmd grep <term>` → `query --keyword <term> --body --all`. Help text + completions.
+
+Shipped: `--all` is only injected when the caller didn't bound the result themselves (`--limit`/`--all` pass through). Registered in KNOWN_COMMANDS (did-you-mean), shell completions, `dotmd help grep`, and `help all`; SKILL.md + CLAUDE.md point agents at it over raw grep.
+
+## Version History
+
+- **2026-06-10T09:37:15Z** Archived — Shipped both phases: query --keyword --body lazy body scan with line-numbered excerpts, and the dotmd grep alias. 13 new tests; suite at 1067.
