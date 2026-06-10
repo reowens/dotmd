@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: archived
 created: 2026-06-10T07:45:49Z
-updated: 2026-06-10T07:45:49Z
+updated: 2026-06-10T09:48:41Z
 surfaces: [cli]
 modules: [cli]
 domain: agent-ux
@@ -11,11 +11,11 @@ parent_plan:
 related_plans:
 related_docs: "> docs/agent-ux-audit.md"
 runlist:
-  - ../archived/b1-slug-resolution-everywhere.md
-  - ../archived/b2-exit-codes-and-briefing-wording.md
-  - ../archived/b3-set-note-worklog.md
-  - ../archived/b4-body-keyword-search.md
-  - ../archived/b5-guard-sed-gap-misuse-recap.md
+  - b1-slug-resolution-everywhere.md
+  - b2-exit-codes-and-briefing-wording.md
+  - b3-set-note-worklog.md
+  - b4-body-keyword-search.md
+  - b5-guard-sed-gap-misuse-recap.md
 current_state: Runlist hub for the 2026-06-10 round-B agent-UX findings; all five children drafted and queued.
 next_step: dotmd runlist next docs/plans/agent-ux-round-b.md (starts b1).
 ---
@@ -43,3 +43,7 @@ Second-round agent-UX audit (2026-06-10 review session, agent-as-user lens — s
 
 - In-session orphan detection (already handled — `staleDays: 1` applies pressure the next day).
 - JSON output for the plan card (current text card is already token-optimal for agents).
+
+## Version History
+
+- **2026-06-10T09:48:41Z** Archived — Runlist drained: b1-b5 all shipped (slug resolution, exit codes/wording, set --note, body keyword search + grep, guard sed gap/deny/misuse recap).
