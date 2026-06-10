@@ -1,8 +1,8 @@
 ---
 type: plan
-status: planned
+status: archived
 created: 2026-06-10T07:45:49Z
-updated: 2026-06-10T07:47:01Z
+updated: 2026-06-10T08:45:06Z
 surfaces: [cli]
 modules: [cli, lifecycle]
 domain: agent-ux
@@ -35,8 +35,20 @@ Closing a plan is in practice always two tool calls: `dotmd set <status> <file>`
 
 ## Phases
 
-### Phase 1 — --note on set/archive ⬜
+### Phase 1 — --note on set/archive ✅
 Flag parsing in `bin/dotmd.mjs`, append logic in `src/lifecycle.mjs`/`src/update.mjs`, `--dry-run` shows the would-be line. Tests: note lands under existing section, section created when missing, dry-run writes nothing.
 
-### Phase 2 — partial-closure reminder ⬜
+### Phase 2 — partial-closure reminder ✅
 Successor-reference heuristic (any `docs/plans/` link or `related_plans` entry added) + warn. Keep it advisory.
+
+## Closeout
+
+- Simpler than planned: `runStatus`/`runArchive` already append a Version History bullet on every transition (`Status: a → b.` / `Archived.`) — `--note` just enriches those existing entries (`Status: a → b — <note>`, `Archived — <note>`) instead of adding a new mechanism. Flag parsing lives in `runSet`/`runStatus`/`runArchive` directly (no `FLAG_SPECS` entry needed; set/archive aren't flag-validated commands).
+- `appendVersionHistory` gained `{ createSection }`: bare docs without a `## Version History` section silently skip the plain transition bullet (unchanged), but an explicit `--note` creates the section at the end of the body rather than dropping the note.
+- `--note` threads through the `set → archive` delegation, the heal-in-place archive path, and both dry-run previews (`Would append Version History: …`).
+- Phase 2 reminder fires on `set partial` only when there's no `--note`, no `related_plans`, and no `.md` reference anywhere in the body — advisory stderr line, computed before the transition since filing can move the file.
+- Tests: 5 new CLI cases in `test/lifecycle.test.mjs`; suite at 1054. Help text (`set`/`archive`), CLAUDE.md, and the plugin SKILL.md updated.
+
+## Version History
+
+- **2026-06-10T08:45:06Z** Archived — shipped: --note on set/archive + partial reminder; 5 tests; suite 1054

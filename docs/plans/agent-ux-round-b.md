@@ -13,7 +13,7 @@ related_docs: "> docs/agent-ux-audit.md"
 runlist:
   - ../archived/b1-slug-resolution-everywhere.md
   - ../archived/b2-exit-codes-and-briefing-wording.md
-  - b3-set-note-worklog.md
+  - ../archived/b3-set-note-worklog.md
   - b4-body-keyword-search.md
   - b5-guard-sed-gap-misuse-recap.md
 current_state: Runlist hub for the 2026-06-10 round-B agent-UX findings; all five children drafted and queued.
