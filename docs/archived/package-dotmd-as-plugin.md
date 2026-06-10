@@ -132,3 +132,8 @@ Body owns: the order of operations (briefing → use → set → archive), the c
 
 - Claude Code plugin docs: plugins-reference, hooks, plugins, plugin-marketplaces (code.claude.com/docs).
 - Reference implementation: `grepmax` plugin (`/Users/reoiv/Development/beyond/tools/gmax/plugins/grepmax`) — `plugin.json` with `"hooks":"./hooks.json"`, `hooks.json` (SessionStart/SubagentStart/CwdChanged/PreToolUse via `${CLAUDE_PLUGIN_ROOT}`), `skills/grepmax/SKILL.md`, `commands/*.md`, `agents/semantic-explore.md`.
+
+## Closeout
+
+- All five phases shipped — the "Shipped (this push — phases 1–3, 5)" and "Phase 4 — SHIPPED" sections above are the detailed record: plugin scaffolded + marketplace-distributed, SKILL.md canonical, hooks cut over atomically, per-repo `.claude/commands` scaffolding retired (removal-only sweep, banner-gated), docs/README updated.
+- Follow-ups dispositioned after archive: missing-binary hint + archive bare-slug resolution landed in `1681129`; guard warn→deny promotion (flagged here under "Guard aggressiveness") happened in plan b5-guard-sed-gap-misuse-recap once the false positives were fixed (0.60.0).

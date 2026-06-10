@@ -50,3 +50,10 @@ Shipped: `--all` is only injected when the caller didn't bound the result themse
 ## Version History
 
 - **2026-06-10T09:37:15Z** Archived — Shipped both phases: query --keyword --body lazy body scan with line-numbered excerpts, and the dotmd grep alias. 13 new tests; suite at 1067.
+
+## Closeout
+
+- Shipped both phases in commit `0a7adf1` (released in 0.60.0). `query --keyword <term> --body` defers the keyword filter until after all frontmatter filters, reads bodies only for surviving candidates (frontmatter matches never touch disk), and attaches up to 2 `{ line, text }` excerpts — file-absolute line numbers, long lines windowed to 120 chars around the needle. `--json` carries `bodyMatches`; `--body` without `--keyword` errors with guidance.
+- `dotmd grep <term>` = `query --keyword <term> --body --all` (`--all` only when the caller didn't pass `--limit`/`--all`). Registered in KNOWN_COMMANDS, completions, `dotmd help grep`/`help all`; SKILL.md + CLAUDE.md steer agents to it over raw grep.
+- Verified against the plan's own repro: `query --keyword skipStale` → 0 results, `grep skipStale` → 7 with excerpts. 13 new tests; suite at 1067.
+- No deferrals.

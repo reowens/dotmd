@@ -47,3 +47,9 @@ Second-round agent-UX audit (2026-06-10 review session, agent-as-user lens — s
 ## Version History
 
 - **2026-06-10T09:48:41Z** Archived — Runlist drained: b1-b5 all shipped (slug resolution, exit codes/wording, set --note, body keyword search + grep, guard sed gap/deny/misuse recap).
+
+## Closeout
+
+- Runlist drained 2026-06-10, all five children archived with their own closeouts: b1 (shared bare-slug resolution + did-you-mean), b2 (exit codes + briefing wording), b3 (`set`/`archive --note` → Version History), b4 (`query --body` + `dotmd grep`), b5 (guard sed gap, edit-status change-detection + deny, hud misuse recap).
+- Released as dotmd-cli 0.60.0 (commit `facde89`); suite went 1040 → 1084 over the round.
+- No tail work — each child shipped fully (no `partial` closures).

@@ -56,3 +56,11 @@ Shipped: `edit-status` now denies by default (`guard: { deny: false }` in config
 ## Version History
 
 - **2026-06-10T09:47:58Z** Archived — Shipped all 3 phases: change-detection fix for the edit-status false positive (health-repo repeat offenses were unchanged-context anchors), sed/perl/awk in-place coverage, deny escalation (guard.deny config gate), and the hud misuse recap line. Suite at 1084.
+
+## Closeout
+
+- Shipped all 3 phases in commit `08aa42c` (released in 0.60.0).
+- Phase 1 verdict: NOT a filename false positive — `health/STATUS.md` is a real managed doc. The bug was presence-detection: `edit-status` fired when `new_string` merely contained a `status:` line, so frontmatter edits (e.g. adding `summary:`) carrying an unchanged `status:` as anchor context tripped it repeatedly. Fixed by comparing extracted status: lines on both sides (Edit pairs, MultiEdit `edits[]` — previously uninspected, Write content vs disk; new-file Writes are creation, not edits).
+- `sed -i` / `perl -pi` / `awk -i inplace` touching `status` on a managed doc now hit the same rule; heredoc bodies excluded so prompt prose describing the rule can't trip it.
+- `edit-status` escalated to deny (`guard: { deny: false }` config gate); `dotmd hud` recaps a rule tripping ≥3× in 7 days in-repo as one teaching line (`misuseRecap` in `--json`). Suite at 1084.
+- No deferrals; the long-tail mutation vectors (echo >, python -c) stay non-goals, handled behaviorally by deny + recap.
