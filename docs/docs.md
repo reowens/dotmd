@@ -2,6 +2,18 @@
 
 <!-- GENERATED:dotmd:start -->
 
+## Active
+
+| Doc | Status |
+|-----|--------|
+| [Improve dotmd Onboarding (Brownfield + Plugin Discovery)](plans/improve-onboarding-brownfield-plugin.md) | Active |
+
+## Planned
+
+| Doc | Status |
+|-----|--------|
+| [Surface coordination-hub body order (next-pickup) in runlist views](plans/surface-coordination-hub-next-pickup.md) | Planned |
+
 ## Reference
 
 | Doc | Status |
@@ -11,7 +23,7 @@
 
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 52 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 53 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|
