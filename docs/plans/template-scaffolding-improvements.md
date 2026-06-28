@@ -10,8 +10,8 @@ audience: internal
 parent_plan:
 related_plans:
 related_docs:
-current_state: Scoped, not started. Eval of dotmd's templates surfaced three workstreams: (1) no runlist/coordination-hub scaffolding, (2) no worked sample plan/runlist anywhere, (3) the plan template is strong but heavy. This plan ranks them so we can pick what to take.
-next_step: Decide which item(s) to take. Recommended order: #1 runlist scaffolding (biggest gap) → #2 sample content → #3 template polish. Each item is independently shippable.
+current_state: "Item #1 (runlist/coordination-hub scaffolding) shipped: `dotmd new plan <hub> --runlist a,b,c` and `--coordination`. Items #2 (sample content) and #3 (template polish) remain."
+next_step: "Item #2 — author a worked runlist example in SKILL.md/README (recommended), and decide whether to add an opt-in `dotmd init --with-examples`."
 ---
 
 # Template & Scaffolding Improvements (Runlists, Samples, Polish)
@@ -41,7 +41,18 @@ generate, and a newcomer has no end-to-end example to copy.
 
 ## Items (ranked)
 
-### 1. No runlist / coordination-hub scaffolding [highest value — biggest gap]
+### 1. No runlist / coordination-hub scaffolding [highest value — biggest gap] — ✅ SHIPPED 2026-06-28
+
+> **Shipped.** `dotmd new plan <hub> --runlist a,b,c` scaffolds a sprint hub
+> (with the `runlist:` array + an `## Order of operations` list) plus one
+> `planned` child stub per slug (`<hub>-NN-<slug>.md`, `parent_plan:` back-ref).
+> `dotmd new plan <hub> --coordination` scaffolds a coordination hub
+> (`execution_mode: coordination` + `## Ranked queue` skeleton). The two flags
+> are mutually exclusive and plan-only; path tokens are rejected. Decisions made:
+> flag-on-`new plan` (not a pseudo-type); children auto-scaffolded; the
+> "point a hub at existing plans" case is deliberately left to a hand-edit (it
+> needs hub-relative ref resolution — a possible follow-up). Help text +
+> CLAUDE.md/SKILL.md updated; 7 tests in new.test.mjs.
 
 `dotmd new` only knows `plan`/`doc`/`prompt`. Runlist hubs (`runlist: [...]`) and
 coordination hubs (`execution_mode: coordination` + a `## Ranked queue` table)
@@ -111,12 +122,17 @@ subset.
 ## Open Questions
 
 - Is the goal CLI scaffolding (`dotmd new …`), docs/examples, or both?
-- Should runlist scaffolding auto-generate child stubs or just the hub?
+- ~~Should runlist scaffolding auto-generate child stubs or just the hub?~~
+  **Resolved (#1):** auto-generate child stubs. (Pointing a hub at *existing*
+  plans is still a hand-edit — deferred follow-up.)
 - Where should sample content live so it helps newcomers without polluting this
   repo's own dogfooded plan list?
 
 ## Version History
 
+- **2026-06-28** Item #1 shipped — runlist + coordination-hub scaffolding in
+  `dotmd new` (flag-on-`new plan`, auto-scaffolded children). Resolves the
+  "auto-generate children vs hub only" open question (auto). next_step → #2.
 - **2026-06-28** Created from a templates/scaffolding eval. Three ranked items;
   awaiting a decision on which to take.
 
