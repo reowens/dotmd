@@ -10,8 +10,8 @@ audience: internal
 parent_plan:
 related_plans:
 related_docs:
-current_state: Audit of dotmd onboarding (greenfield/brownfield init, plugin discovery, version skew) on 0.61.0 produced five ranked findings. Nothing fixed yet — this plan captures them so they survive the session.
-next_step: Fix finding #1 — brownfield generateDetectedConfig emits staleDays for default-only statuses (ready/scoping), so every command (incl. the hud SessionStart hook) warns. Scope the resolver warning to user-provided keys and emit a matching staleDays block.
+current_state: Audit of dotmd onboarding (greenfield/brownfield init, plugin discovery, version skew) on 0.61.0 produced five ranked findings. Finding #1 (brownfield staleDays warning) shipped; #2–#5 remain.
+next_step: Finding #2 — surface `dotmd update` (add to `help all` Setup section + a README subsection under Install; change the postinstall nudge to suggest `dotmd update --plugin-only`).
 ---
 
 # Improve dotmd Onboarding (Brownfield + Plugin Discovery)
@@ -40,7 +40,15 @@ Audit method: ran each track in throwaway git repos against
 
 ## Findings (ranked)
 
-### 1. Brownfield init generates a config that warns on every command [highest priority]
+### 1. Brownfield init generates a config that warns on every command [highest priority] — ✅ SHIPPED 2026-06-28
+
+> **Shipped.** Both parts landed: the resolver (`validateConfig` in src/config.mjs)
+> now only validates `statuses.staleDays` keys when the user actually authored
+> that map — inherited-default keys no longer warn — and `generateDetectedConfig`
+> (src/init.mjs) emits a `staleDays` block scoped to the detected statuses
+> (`KNOWN_STALE_DAYS`), so the generated config is internally consistent. Real
+> typos in a user-provided map are still caught. Covered by tests in
+> config.test.mjs + init.test.mjs.
 
 `generateDetectedConfig` (src/init.mjs) emits `statuses.order` from the detected
 statuses (e.g. `['active', 'wip']`) but the default global `staleDays` map
@@ -110,4 +118,5 @@ degrades every session in affected repos.
 
 ## Version History
 
+- **2026-06-28** Finding #1 shipped — brownfield `init`/resolver no longer warn about inherited default `staleDays` keys; `generateDetectedConfig` emits a scoped `staleDays` block. Tests added. next_step advanced to #2.
 - 2026-06-12 Created from onboarding audit on 0.61.0.
