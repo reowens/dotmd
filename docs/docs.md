@@ -7,6 +7,7 @@
 | Doc | Status |
 |-----|--------|
 | [Improve dotmd Onboarding (Brownfield + Plugin Discovery)](plans/improve-onboarding-brownfield-plugin.md) | Active |
+| [Template & Scaffolding Improvements (Runlists, Samples, Polish)](plans/template-scaffolding-improvements.md) | Active |
 
 ## Reference
 
