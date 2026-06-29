@@ -1,8 +1,8 @@
 ---
 type: plan
-status: in-session
+status: archived
 created: 2026-06-28T22:49:37Z
-updated: 2026-06-28T23:07:47Z
+updated: 2026-06-29T00:48:27Z
 surfaces:
 modules:
 domain:
@@ -129,6 +129,7 @@ Two release paths exist and must both cover plugin files:
 
 ## Version History
 
+- **2026-06-29T00:48:27Z** Archived — All 5 phases shipped in v0.64.0.
 - **2026-06-28T23:07:47Z** Status: active → in-session.
 - **2026-06-28** Created from dotmd review findings.
 - **2026-06-28** Review pass: verified all findings against the code (two empirically). Sharpened Phase 2 (npm version is the real release path; names SKILL.md/commands/hooks gaps), Phase 3 (heal branch also hard-codes `archived`; cited regex limits + line refs), Phase 5 (KNOWN_COMMANDS itself missing `surfaces`/aliases). Resolved the archive-status Open Question (preserve target status). Added severity framing + dead-code cleanup.
