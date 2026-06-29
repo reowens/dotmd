@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: archived
 created: 2026-06-13T04:01:14Z
-updated: 2026-06-13T04:01:14Z
+updated: 2026-06-29T02:46:14Z
 surfaces:
 modules:
 domain:
@@ -10,8 +10,8 @@ audience: internal
 parent_plan:
 related_plans:
 related_docs:
-current_state: Audit of dotmd onboarding (greenfield/brownfield init, plugin discovery, version skew) on 0.61.0 produced five ranked findings. Finding #1 (brownfield staleDays warning) shipped; #2–#5 remain.
-next_step: Finding #2 — surface `dotmd update` (add to `help all` Setup section + a README subsection under Install; change the postinstall nudge to suggest `dotmd update --plugin-only`).
+current_state: All five onboarding-audit findings shipped. #1/#3/#4 + #2's postinstall nudge landed earlier (37f0008); this session finished #2 (update in `help all` Setup + README `### Updating` subsection) and #5 (npx try-before-install documented, `taxonomy.modules` emitted by generateDetectedConfig). Closing.
+next_step: None — archived. Optional future work: a `dotmd-hook` node_modules/.bin fallback (the declined alternative to #4's README note).
 ---
 
 # Improve dotmd Onboarding (Brownfield + Plugin Discovery)
@@ -71,7 +71,11 @@ Fix (two parts):
 - `generateDetectedConfig`: emit a `staleDays` block scoped to the detected
   statuses so the generated config is internally consistent.
 
-### 2. `dotmd update` is undiscoverable [cheap win]
+### 2. `dotmd update` is undiscoverable [cheap win] — ✅ SHIPPED
+
+> **Shipped.** `update` now appears in the `help all` Setup section (bin/dotmd.mjs)
+> and an `### Updating` subsection under Install in the README. The postinstall
+> nudge already pointed at `dotmd update --plugin-only` (landed earlier in 37f0008).
 
 Polished command (`--check`, `--cli-only`, `--plugin-only`, good `--help`) solving
 real CLI/plugin skew — but absent from both `dotmd help all` and the README. Only
@@ -83,7 +87,11 @@ Fix:
 - Add a short README subsection under Install.
 - Change the postinstall nudge to suggest `dotmd update --plugin-only`.
 
-### 3. Plugin hint gated on project-local `.claude/` [cheap win]
+### 3. Plugin hint gated on project-local `.claude/` [cheap win] — ✅ SHIPPED (37f0008)
+
+> **Shipped earlier (37f0008).** `runInit` now gates the plugin hint on
+> `likelyClaudeUser` (project `.claude/` **or** `~/.claude/` exists), so greenfield
+> repos with no local `.claude/` still see it.
 
 Greenfield `dotmd init` in a repo without `.claude/` says nothing about the
 plugin — but most *new* repos have no `.claude/` yet, so the users most likely to
@@ -93,7 +101,13 @@ want the plugin never see the hint. `detectSessionStartHook` already inspects
 Fix: gate the plugin hint on "user has Claude Code at all" (`~/.claude` exists)
 rather than "this project has `.claude/`".
 
-### 4. devDep path quietly breaks the plugin
+### 4. devDep path quietly breaks the plugin — ✅ SHIPPED (37f0008)
+
+> **Shipped earlier (37f0008), README option.** The Install section now carries a
+> blockquote spelling out that the plugin requires the global install (a devDep
+> lives off `PATH`, so the hooks silently no-op). The alternative `dotmd-hook`
+> `node_modules/.bin` fallback was deliberately *not* taken — the finding framed
+> these as "pick one", and the doc note is the lower-risk fix.
 
 README offers `npm install -D dotmd-cli`, but the plugin hooks only look for
 `dotmd` on PATH — a devDep-only user with the plugin installed gets the "CLI isn't
@@ -102,14 +116,19 @@ installed" hint despite having installed it.
 Fix (pick one): README note that the plugin requires the global install; or let
 `dotmd-hook` fall back to `node_modules/.bin/dotmd` in the cwd.
 
-### 5. Small ones
+### 5. Small ones — ✅ SHIPPED
 
 - `npx dotmd-cli init` works (single-bin package) but isn't documented as a
-  try-before-install path.
+  try-before-install path. → **Done:** README Install block now lists
+  `npx dotmd-cli init` as the try-before-install path.
 - init scan collects `modules` but `generateDetectedConfig` never emits a
-  taxonomy for them (surfaces get one).
+  taxonomy for them (surfaces get one). → **Done:** `generateDetectedConfig`
+  now emits `taxonomy.modules` symmetrically with `surfaces` (full detected set,
+  so no false warnings); test added in init.test.mjs.
 - postinstall nudge prints for all global installs even when `claude` isn't on
-  PATH (phrased conditionally, so low severity).
+  PATH (phrased conditionally, so low severity). → **Already conditional** —
+  prints a bare `dotmd CLI installed.` when `claude` isn't on PATH (37f0008).
+  No further change.
 
 ## Suggested order
 
@@ -118,5 +137,7 @@ degrades every session in affected repos.
 
 ## Version History
 
+- **2026-06-29T02:46:14Z** Archived — All 5 findings shipped. This session: #2 (update in help-all Setup + README ### Updating subsection) and #5 (npx try-before-install in README, taxonomy.modules emitted by generateDetectedConfig + test). #1/#3/#4 + #2 postinstall landed earlier in 37f0008. Declined: dotmd-hook node_modules/.bin fallback (README note is the chosen fix per finding's 'pick one').
+- **2026-06-29T02:42:13Z** Started (active → in-session).
 - **2026-06-28** Finding #1 shipped — brownfield `init`/resolver no longer warn about inherited default `staleDays` keys; `generateDetectedConfig` emits a scoped `staleDays` block. Tests added. next_step advanced to #2.
 - 2026-06-12 Created from onboarding audit on 0.61.0.
