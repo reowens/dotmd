@@ -13,6 +13,7 @@ related_plans:
   - "> dotmd-runlist-mutation.md"
   - "> dotmd-plugin-skill-drift.md"
   - "> dotmd-roadmap-layer.md"
+  - "> dotmd-baton-exit-nudge.md"
 related_docs:
 current_state: Coordination hub for dotmd's forward roadmap, derived from a 3-researcher forward audit on 2026-06-29 (trajectory/parked-ideas, feature-surface maturity, rough-edges/tensions). The core is mature and the deck is otherwise drained; the path forward is to harden where it silently breaks, finish the one half-built feature (runlists), and dogfood drift-detection on dotmd's own plugin — not to add speculative features.
 next_step: Tracks 1–3 done (1 archived; 2 & 3 shipped+partial — each deferred a premature tail Phase). Next and last pickup is Track 4 (dotmd-roadmap-layer), now unparked to active since its Track 2 gate shipped — START with its Phase 0 earn-its-keep ruling (preset vs. primitive) before building anything.
@@ -49,6 +50,7 @@ graph pick it up. -->
 | 2 | [Runlist mutation](dotmd-runlist-mutation.md) | The live feature frontier: runlists are read-only, so adding/reordering children means hand-editing the array — contradicts dotmd's own ethos. Where the energy already is. | partial |
 | 3 | [Plugin / skill drift guards](dotmd-plugin-skill-drift.md) | Cheap, maximally on-identity: make dotmd catch drift in its own SKILL.md ⇄ CLAUDE.md. **Shipped Phase 1** (the drift guard); Phase 2 (sweep `.claude/skills/`) deferred as premature — dotmd never scaffolds skill files, so the sweep would be dead code. | partial |
 | 4 | [Roadmap layer](dotmd-roadmap-layer.md) | A tier *above* runlists, organized by time/priority horizon — what this hub had to improvise. Gate satisfied (#2 shipped → runlists are mutable), now unparked. Start with the earn-its-keep ruling (preset vs. primitive). | active |
+| 5 | [Baton exit nudge](dotmd-baton-exit-nudge.md) | Dogfood-proven "harden where it silently breaks": baton-on-exit is the only core-loop step with no mechanical backstop (no Stop hook; the lone reminder is SessionStart + in-session-gated). **Candidate** — Phase 0 earn-its-keep ruling gates it against #4. | planned |
 
 ## Deliberately dormant (saw them, parked them)
 
@@ -68,6 +70,7 @@ Pull any of these only on a real ask — listing so they're not silently lost:
 
 ## Version History
 
+- **2026-06-29** Added candidate #5 (dotmd-baton-exit-nudge) under the "harden where it silently breaks" theme — surfaced by dogfooding: a session shipped Track 3 and released, then narrated the next pickup into chat instead of `dotmd baton`, exposing that baton-on-exit has no mechanical backstop. Planned/gated behind its own Phase 0 earn-its-keep ruling vs. Track 4.
 - **2026-06-29** Track 3 (plugin/skill drift guards) shipped Phase 1 (the SKILL.md ⇄ CLAUDE.md marked-block drift guard via `src/skill-drift.mjs`, surfaced in `dotmd check`/`doctor`) and left partial — Phase 2 (sweep `.claude/skills/`) deferred as premature since dotmd never scaffolds skill files. Track 4 (roadmap-layer) unparked queued-after → active now that its Track 2 gate (mutable runlists) shipped; it's the last pickup. Refreshed ranked-queue statuses + next_step.
 - **2026-06-29T09:58:03Z** Track 1 archived, Track 2 shipped (0.65.0) + left partial; refreshed ranked-queue statuses + next_step so the hub points at Track 3. (0.65.1 shipped the parked-status next-pickup fix that makes the `→` advance past Track 2's partial on its own.)
 - **2026-06-29T05:44:40Z** Created (coordination hub) from the forward audit.

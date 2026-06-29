@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: awaiting
 created: 2026-06-29T06:30:29Z
-updated: 2026-06-29T10:16:19Z
+updated: 2026-06-29T12:42:13Z
 surfaces:
 modules:
 domain:
@@ -75,12 +75,51 @@ composing. Until both hold, leave it `queued-after`.
 <!-- Status markers in heading text: ⬜ not started · 🟡 in progress (pickup
 targets this) · ✅ shipped · ⏭ skipped · 🚧 blocked. -->
 
-### Phase 0 — Earn-its-keep ruling: preset vs. primitive ⬜
+### Phase 0 — Earn-its-keep ruling: preset vs. primitive 🟡
 
-Decide, against the bar above, whether a roadmap is a thin `roadmap` preset of the
-coordination hub (horizon buckets + a view, no new tier semantics) or a real
-third-tier primitive (children-can-be-runlists + rollup). **Recommendation going
-in: start as the preset.** Everything below is contingent on this ruling.
+**Ruling (technical merits — settled): PRESET, not primitive.** Tested all four
+tier-justifying features from "the bar":
+
+1. **Horizon buckets (now/next/later)** — achievable as `## Now/## Next/## Later`
+   body sections on a coordination hub (renderer is already prose-first). No new
+   tier. *And* demand is weak: the one existing roadmap-shaped hub
+   (`dotmd-forward`) organizes by a ranked priority queue, not time horizons.
+2. **Children-can-be-runlists + rollup** — the ONLY genuine primitive
+   justification, but premature: repo has **1 runlist**. The Caution's "≥2
+   runlists that actually want composing" is unmet. (Unparking cleared only the
+   *first* gate — "Track 2 shipped → runlists are mutable"; necessary, not
+   sufficient.)
+3. **`dotmd roadmap` dashboard** — marginal over existing `dotmd runlists`/
+   `modules`.
+4. **First-class icebox/dormant** — real but tiny; a `## Icebox` section or the
+   `planned` status covers it. No tier needed.
+
+No feature is BOTH primitive-only AND non-premature → preset. A third hub
+concept now also cuts against the project's consolidation grain and Open Q #2.
+
+**Open (the user's call — build-scope, A/B/C):**
+
+- **A — Defer (recommended).** Record ruling, mark `partial`, build nothing.
+  Revisit when ≥2 horizon-organized hubs exist or `dotmd-forward` migrates to
+  horizons. *User:* no change. *Agent:* no change. *Scope:* docs-only.
+- **B — Minimal preset.** `dotmd new plan <hub> --roadmap` scaffolds a
+  coordination hub with `## Now/Next/Later/Icebox`. *User:* new flag; otherwise
+  renders/behaves exactly like a coordination hub (pinned, held out of active
+  count); moves plans between horizons by hand. *Agent:* one template option;
+  contents still hand-authored (no `--horizon` query axis). Gotcha: `dotmd
+  runlists` `next →` resolves from a ranked-queue/order list, NOT horizon
+  sections → no next-arrow unless the resolver learns horizons. *Scope:*
+  `new.mjs` flag+template, HELP, optional check nudge, docs, tests (~half-day).
+- **C — Full primitive.** Roadmap points at runlists with done/total rollup into
+  horizon buckets + `dotmd roadmap`/`roadmaps` views + cross-runlist next-pickup.
+  *User:* genuine bird's-eye (horizon→runlist→plan, progress aggregated).
+  *Agent:* new tier in model+guidance; `roadmap next` finds top next action
+  across all runlists. *Utility:* unique, but only pays off with several
+  runlists — at N=1 it's a one-row table, worse than `dotmd runlists`. *Scope:*
+  large — `buildRoadmapIndex`+rollup, new commands/render, 3rd-level integration
+  in plans/briefing/health, scaffolding, tests (multi-day).
+
+Everything below (Phases 1–3) is contingent on this scope choice.
 
 ### Phase 1 — Horizon buckets + `dotmd new plan <hub> --roadmap` ⬜
 
@@ -111,6 +150,8 @@ the horizon view. Only build if Phase 0 ruled "primitive" and ≥2 runlists exis
 
 ## Version History
 
+- **2026-06-29T12:42:13Z** Status: in-session → awaiting — Phase 0 ruled preset-not-primitive on technical merits; awaiting the user's build-scope call (A defer / B minimal preset / C full primitive — all written into the Phase 0 section).
+- **2026-06-29T11:37:11Z** Started (active → in-session).
 - **2026-06-29T10:16:19Z** Status: queued-after → active — Predecessor Track 2 (runlist mutation) shipped — runlists are now mutable, so the queued-after gate is satisfied. Ready to pick up; first step is still the Phase 0 earn-its-keep ruling (preset vs. primitive).
 - **2026-06-29T06:31:13Z** Status: active → queued-after — Sequenced behind dotmd-runlist-mutation — composing runlists needs them first-class + mutable first.
 - **2026-06-29T06:30:29Z** Created as a Track 2 successor (queued-after runlist-mutation).
