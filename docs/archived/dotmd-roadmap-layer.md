@@ -1,13 +1,13 @@
 ---
 type: plan
-status: awaiting
+status: archived
 created: 2026-06-29T06:30:29Z
-updated: 2026-06-29T22:21:11Z
+updated: 2026-06-29T22:46:31Z
 surfaces:
 modules:
 domain:
 audience: internal
-parent_plan: dotmd-forward.md
+parent_plan: ../plans/dotmd-forward.md
 related_plans:
 related_docs:
 current_state: Tier-3 roadmap primitive (`execution_mode: roadmap`) — composes runlists and rolls their done/total up into a recursive grand total, with `dotmd roadmap`/`roadmaps`/`roadmap next` + plans/briefing/health integration + a `check` nudge. BUILT, tested (1290), and dogfooded (dotmd-forward + beyond/platform master-runlist 100/333). Axis is domain composition; horizon grouping deferred by design. Built but UNRELEASED by user choice.
@@ -225,6 +225,7 @@ is deferred.
 
 ## Version History
 
+- **2026-06-29T22:46:31Z** Archived — Shipped in 0.67.0 — full tier-3 roadmap primitive (axis-corrected): coordination-hub rollup, execution_mode:roadmap + recursive buildRoadmapIndex, dotmd roadmap/roadmaps/roadmap-next, plans/runlists/briefing/health integration, --roadmap scaffold, check nudge. Dogfooded: dotmd-forward + beyond/platform master-runlist (100/333 across 24 runlists, live under global 0.67.0). Horizon grouping deferred by design (optional flavor the axis-correction demoted). Platform master-runlist.md migration left uncommitted per user.
 - **2026-06-29T22:21:11Z** Status: in-session → awaiting — Full primitive (axis-corrected) BUILT + committed on main, UNRELEASED by user choice. 6 commits: Phase 1 coordination-hub rollup (e2d0e5e), Phase 2 roadmap tier+detector+buildRoadmapIndex+scaffold+check-nudge (79d1924), Phase 3+4 roadmap/roadmaps views + cross-runlist next + plans/runlists/briefing/health integration (7c2df09), Phase 5 docs+dogfood (30f5568), nudge bugfix found dogfooding (f826eeb). 1290 tests pass; dotmd check clean. Dogfood: dotmd-forward migrated to execution_mode:roadmap (committed); beyond/platform master-runlist.md edited→roadmap but LEFT UNCOMMITTED in the platform tree (renders 100/333 across 24 runlists via the local dev bin). Horizon grouping deferred by design (optional flavor; axis-correction demoted it). AWAITING: user's release go-ahead → npm version minor (→0.67.0), which makes the platform's global dotmd recognize the roadmap migration; then archive this plan.
 - **2026-06-29T21:03:50Z** Status: awaiting → in-session — Platform eval flips Phase 0: the prematurity finding was scoped to dotmd's own repo (1 runlist), but the consuming repo (beyond/platform) has 28 coordination-hub runlists + 1120 plans + a hand-built master-runlist hub composing 24 of them in prose — tier-3 composition + rollup is justified, not premature. User chose FULL PRIMITIVE (axis-corrected): build around DOMAIN composition + done/total rollup + nested dashboard + cross-runlist next-pickup; horizon buckets demoted to optional flavor (the platform organizes by module, not now/next/later).
 - **2026-06-29T12:42:13Z** Status: in-session → awaiting — Phase 0 ruled preset-not-primitive on technical merits; awaiting the user's build-scope call (A defer / B minimal preset / C full primitive — all written into the Phase 0 section).
