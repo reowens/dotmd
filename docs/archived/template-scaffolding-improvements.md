@@ -1,8 +1,8 @@
 ---
 type: plan
-status: active
+status: archived
 created: 2026-06-28T22:53:06Z
-updated: 2026-06-28T22:53:06Z
+updated: 2026-06-29T01:30:08Z
 surfaces:
 modules:
 domain:
@@ -110,7 +110,16 @@ real `dotmd plans` / briefing output (dogfooding pollution).
 
 Open question: where do samples live, and do we want `init` scaffolding at all?
 
-### 3. Plan template is strong but heavy [polish, low priority]
+### 3. Plan template is strong but heavy [polish, low priority] — ✅ SHIPPED 2026-06-28
+
+> **Shipped.** Two plan body-variant flags on `dotmd new plan` (plans only,
+> mutually exclusive with each other and with `--runlist`/`--coordination`):
+> `--lite`/`--minimal` (Problem → Phases → Version History) and
+> `--audit`/`--findings` (Problem → Findings (ranked) → Suggested order → Open
+> Questions). Both route body input into `## Problem`, emit the standard plan
+> frontmatter (no hub markers), and label the shape in the Created/dry-run line.
+> `src/new.mjs` (two body builders + a generalized plan-shape guard), help text
+> in `bin/dotmd.mjs`, README/CLAUDE.md/SKILL.md, and 9 tests in new.test.mjs.
 
 The default plan scaffold emits ~9 empty sections. Great for a real execution
 plan; overkill for a quick one, and it doesn't match the "Findings (ranked)"
@@ -142,6 +151,8 @@ subset.
 
 ## Version History
 
+- **2026-06-29T01:30:08Z** Archived — All 3 ranked items shipped/decided (#1 runlist+coordination scaffolding, #2a worked example + #2b declined, #3 --lite/--audit variants).
+- **2026-06-29T01:21:44Z** Status: active → in-session.
 - **2026-06-28** Item #2 shipped (a) / decided (b) — worked end-to-end runlist
   example added to README (Runlists section) + plugin SKILL.md, using real
   captured `dotmd new --runlist` / `dotmd runlist [next]` output. Declined
@@ -155,4 +166,15 @@ subset.
 
 ## Closeout
 
-<!-- Filled on archive: what shipped, key commits, deferrals dispositioned. -->
+All three ranked items shipped/decided:
+- **#1** — `dotmd new plan <hub> --runlist a,b,c` (sprint hub + child stubs) and
+  `--coordination` (coordination hub). Shipped 2026-06-28.
+- **#2a** — worked end-to-end runlist example in README + plugin SKILL.md (real
+  captured output). **#2b** `dotmd init --with-examples` deliberately declined —
+  the docs example covers onboarding without a live sample plan.
+- **#3** — `--lite`/`--minimal` and `--audit`/`--findings` plan body variants on
+  `dotmd new plan`.
+
+Deferred follow-up (out of scope here): pointing a runlist hub at an *existing*
+plan (currently a hand-edit) needs hub-relative ref resolution — spin a fresh
+plan if it's wanted.
