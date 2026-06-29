@@ -1,8 +1,8 @@
 ---
 type: plan
-status: awaiting
+status: in-session
 created: 2026-06-29T06:30:29Z
-updated: 2026-06-29T12:42:13Z
+updated: 2026-06-29T21:03:50Z
 surfaces:
 modules:
 domain:
@@ -16,32 +16,50 @@ next_step: Unparked (Track 2 runlist-mutation shipped, so runlists are now mutab
 
 # Dotmd Roadmap Layer
 
-> A roadmap is a third tier above runlists, organized by **time/priority horizon**.
-> It composes runlists *and* loose plans into now/next/later buckets — an axis
-> neither existing hub flavor owns. The motivating evidence: `dotmd-forward` is a
-> roadmap that had to be improvised out of coordination-hub primitives (a
-> recommended-not-gated order, a hand-written "Deliberately dormant" bucket,
-> one-way refs to preserve child back-links).
+> A roadmap is a third tier that **composes runlists** — a hub whose children are
+> themselves hubs, with **done/total progress rolled up** across them and a
+> dashboard + nested view over the whole. Its organizing axis is **domain/module
+> composition** (corrected in Phase 0 from the original time-horizon thesis);
+> now/next/later horizons are an *optional grouping flavor*, not the core.
+>
+> The motivating evidence is no longer one improvised hub — it's the consuming
+> repo. **`beyond/platform` has 28 coordination-hub runlists, 1,120 plan files
+> (281 live / 815 archived), and a hand-built `master-runlist` composing 24 of
+> them in prose** — maintaining, by hand, the exact rollup a tier-3 primitive
+> would compute. dotmd renders all 28 flat today: `master` shows as one row among
+> its own children, with zero progress aggregation anywhere.
 
 ## Problem
 
-dotmd's hierarchy is two-tier with two hub flavors, each owning a distinct axis:
+dotmd's hierarchy is two-tier with two hub flavors:
 
-| tier | concept | organizing axis |
-|------|---------|-----------------|
-| hub | **runlist** (`runlist:` array) | dependency *sequence* (extract → rewrite → cleanup) |
-| hub | **coordination hub** (`execution_mode: coordination`) | *domain/area*, often unordered |
-| leaf | **plan** | a unit of work |
+| tier | concept | organizing axis | progress |
+|------|---------|-----------------|----------|
+| hub | **runlist** (`runlist:` array) | dependency *sequence* (extract → rewrite → cleanup) | `done/total` rollup ✅ |
+| hub | **coordination hub** (`execution_mode: coordination`) | *domain/area*, often unordered | **none** ✗ |
+| leaf | **plan** | a unit of work | — |
 
-There is no concept whose axis is **time/priority horizon**. When you want to say
-"this quarter: now / next / later," you reach for a coordination hub and bend it —
-exactly what happened with `dotmd-forward`. A roadmap fills that gap:
+Two gaps, both proven by the platform's 28-hub `master-runlist`:
+
+1. **No composition.** Nothing models a hub *of hubs*. `master-runlist` points its
+   `related_plans:` at 24 other runlists, but dotmd treats it as a peer of its own
+   children — flat, one row each.
+2. **No rollup across hubs.** Sprint `runlist:` hubs get `done/total`; coordination
+   hubs get only a fuzzy "N related". So there is no number anywhere that says how
+   much of a domain — or of the whole platform — has shipped.
+
+A roadmap fills both: a tier-3 hub that points at runlists and rolls their
+progress up.
 
 ```
-roadmap     → horizon buckets (now / next / later / icebox)   ← axis: time/priority
-  runlist   → ordered plans                                    ← axis: dependency
+roadmap     → runlists, with done/total rolled up           ← axis: domain composition
+  runlist   → ordered / clustered plans, done/total          ← axis: dependency or domain
     plan    → unit of work
 ```
+
+(Time horizons — now/next/later/icebox — are a *grouping* a roadmap may optionally
+apply over its child runlists; see Phase 5. They are not the organizing axis, since
+the real consumer organizes by module/domain.)
 
 ## The bar this must clear (do not skip)
 
@@ -62,94 +80,144 @@ tier:
 - **"Icebox/dormant" as a first-class horizon** — model the parked-but-real bucket
   instead of writing it as prose (as `dotmd-forward` had to).
 
-## Caution — premature until there are runlists to compose
+## ~~Caution — premature until there are runlists to compose~~ (CLEARED)
 
-The repo currently has **one** runlist. Building a layer to compose runlists you
-don't have is textbook premature. This plan reserves the *shape* and the decision;
-it should only be picked up once (a) the runlist-mutation work has made runlists
-first-class and mutable, and (b) there are ≥2 runlists that actually want
-composing. Until both hold, leave it `queued-after`.
+> Original caution: "the repo has **one** runlist; building a layer to compose
+> runlists you don't have is textbook premature; gate on (a) runlist-mutation
+> shipped + (b) ≥2 runlists that want composing."
+>
+> **Both gates now met.** (a) Track 2 (runlist mutation) shipped. (b) The
+> prematurity test was mis-scoped to *dotmd's own* repo — dotmd is a product, so
+> the test is the *consuming* repo. `beyond/platform` has **28** runlists and a
+> hand-built tier-3 hub already composing them. Not premature; overdue.
 
 ## Phases
 
 <!-- Status markers in heading text: ⬜ not started · 🟡 in progress (pickup
 targets this) · ✅ shipped · ⏭ skipped · 🚧 blocked. -->
 
-### Phase 0 — Earn-its-keep ruling: preset vs. primitive 🟡
+### Phase 0 — Earn-its-keep ruling ✅ (REVERSED → PRIMITIVE, axis-corrected)
 
-**Ruling (technical merits — settled): PRESET, not primitive.** Tested all four
-tier-justifying features from "the bar":
+**Original ruling: preset, not primitive.** It rested on one load-bearing claim —
+"the only genuine primitive justification (runlist children + rollup) is premature:
+repo has 1 runlist." **That claim was scoped to the wrong repo.** dotmd is a
+product; the earn-its-keep test is the *consuming* repo, not dotmd's dogfood repo.
 
-1. **Horizon buckets (now/next/later)** — achievable as `## Now/## Next/## Later`
-   body sections on a coordination hub (renderer is already prose-first). No new
-   tier. *And* demand is weak: the one existing roadmap-shaped hub
-   (`dotmd-forward`) organizes by a ranked priority queue, not time horizons.
-2. **Children-can-be-runlists + rollup** — the ONLY genuine primitive
-   justification, but premature: repo has **1 runlist**. The Caution's "≥2
-   runlists that actually want composing" is unmet. (Unparking cleared only the
-   *first* gate — "Track 2 shipped → runlists are mutable"; necessary, not
-   sufficient.)
-3. **`dotmd roadmap` dashboard** — marginal over existing `dotmd runlists`/
-   `modules`.
-4. **First-class icebox/dormant** — real but tiny; a `## Icebox` section or the
-   `planned` status covers it. No tier needed.
+**Platform eval (`beyond/platform`, 2026-06-29):**
 
-No feature is BOTH primitive-only AND non-premature → preset. A third hub
-concept now also cuts against the project's consolidation grain and Open Q #2.
+- **28** coordination-hub runlists; **1,120** plan files (281 live / 815 archived).
+- A `master-runlist` (`execution_mode: coordination`) whose `related_plans:` point
+  at **24** of those runlists — a tier-3 hub built entirely from tier-2 parts.
+- Its `current_state:` frontmatter is a paragraph-long, *hand-maintained* status
+  digest of those 24 children — a human computing the rollup by hand.
+- `dotmd runlists` renders all 28 **flat**: `master` is one row among its own
+  children; **no done/total anywhere** (coordination hubs have no rollup).
 
-**Open (the user's call — build-scope, A/B/C):**
+So justification #2 (runlist children + rollup) is **real and not premature** — met
+~24×. **Ruling reversed: PRIMITIVE.**
 
-- **A — Defer (recommended).** Record ruling, mark `partial`, build nothing.
-  Revisit when ≥2 horizon-organized hubs exist or `dotmd-forward` migrates to
-  horizons. *User:* no change. *Agent:* no change. *Scope:* docs-only.
-- **B — Minimal preset.** `dotmd new plan <hub> --roadmap` scaffolds a
-  coordination hub with `## Now/Next/Later/Icebox`. *User:* new flag; otherwise
-  renders/behaves exactly like a coordination hub (pinned, held out of active
-  count); moves plans between horizons by hand. *Agent:* one template option;
-  contents still hand-authored (no `--horizon` query axis). Gotcha: `dotmd
-  runlists` `next →` resolves from a ranked-queue/order list, NOT horizon
-  sections → no next-arrow unless the resolver learns horizons. *Scope:*
-  `new.mjs` flag+template, HELP, optional check nudge, docs, tests (~half-day).
-- **C — Full primitive.** Roadmap points at runlists with done/total rollup into
-  horizon buckets + `dotmd roadmap`/`roadmaps` views + cross-runlist next-pickup.
-  *User:* genuine bird's-eye (horizon→runlist→plan, progress aggregated).
-  *Agent:* new tier in model+guidance; `roadmap next` finds top next action
-  across all runlists. *Utility:* unique, but only pays off with several
-  runlists — at N=1 it's a one-row table, worse than `dotmd runlists`. *Scope:*
-  large — `buildRoadmapIndex`+rollup, new commands/render, 3rd-level integration
-  in plans/briefing/health, scaffolding, tests (multi-day).
+**Axis correction (the important nuance).** The platform organizes by
+**domain/module**, not time horizon — not one of the 28 hubs is now/next/later. So
+the original headline thesis ("roadmap = horizon layer") had the axis *wrong*. The
+primitive is **recursive hub composition + done/total rollup + nested dashboard +
+cross-runlist next-pickup**, axis-agnostic (domain in practice). Horizon buckets
+survive only as an *optional grouping flavor* (Phase 5), not the spine.
 
-Everything below (Phases 1–3) is contingent on this scope choice.
+**Resolves the two real Open Questions:** roadmap does **not** replace the
+coordination hub (Open Q #2) — it sits *above* it; and horizon is a body-section
+flavor, not a frontmatter taxonomy (Open Q #1).
 
-### Phase 1 — Horizon buckets + `dotmd new plan <hub> --roadmap` ⬜
+**User's build-scope call: C — full primitive (axis-corrected).** (A defer / B
+horizon preset both rejected: A because the platform is real demand, B because it
+builds the wrong axis.)
 
-Introduce horizon as the organizing axis: a `## Now / ## Next / ## Later /
-## Icebox` body structure (or a `horizon:` field per child). Scaffold a roadmap
-hub. Reuse the coordination-hub plumbing (pinned, held out of active count).
+---
 
-### Phase 2 — `dotmd roadmap` dashboard view ⬜
+## Design (the axis-corrected primitive)
 
-Render a roadmap by horizon with per-bucket contents and (if Phase 0 went
-"primitive") runlist progress rollup. Mirror `dotmd modules` / `dotmd runlists`.
+**The model.** A *roadmap* is a coordination hub one level up: `execution_mode:
+roadmap`. Its children (via `related_plans:`, or `runlist:` for an ordered
+roadmap) are themselves **hubs** (sprint runlists or coordination hubs), not leaf
+plans. Detection mirrors `isCoordinationHub`: explicit `execution_mode: roadmap`,
+with a structural fallback (a coordination hub whose children are themselves hubs)
+surfaced as a `dotmd check` nudge rather than auto-promoted.
 
-### Phase 3 — (primitive path only) runlist children + rollup ⬜
+**Rollup is the spine.** Two levels:
 
-Let a roadmap point at runlists, not just plans, and roll their done/total up into
-the horizon view. Only build if Phase 0 ruled "primitive" and ≥2 runlists exist.
+1. *Per coordination hub:* give `buildCoordinationIndex` a `done/total` (count
+   archived vs. resolved children) — today it only has `childCount`. This is the
+   biggest single win and it's independently shippable (Phase 1).
+2. *Per roadmap:* aggregate the children's rollups — `master 280/520 · billing 4/9
+   · identity 8/27 · …` plus a grand total. Recursive: a roadmap child that is
+   itself a runlist contributes its own `done/total`.
+
+**Reuse, don't reinvent.** `buildRunlistIndex` already computes
+`total/doneCount/parkedCount/nextChildPath` for sprint hubs; `buildCoordinationIndex`
+already resolves children + body-order `nextPickup`. Phase 1 brings coordination
+hubs up to parity (rollup), then `buildRoadmapIndex` composes both.
+
+### Phase 1 — Rollup for coordination hubs ⬜  *(independently shippable)*
+
+Extend `buildCoordinationIndex` (`src/runlist.mjs`) so each hub carries
+`total / doneCount / parkedCount` over its resolved `related_plans` children
+(reusing the archive/parked logic from `buildRunlistIndex`). Surface `done/total`
+in `dotmd runlists`, the `dotmd plans` Runlists section, and `dotmd health`'s
+Runlists tally — replacing/augmenting the fuzzy "N related". On the platform this
+alone turns 28 opaque hubs into 28 progress bars. Tests + docs.
+
+### Phase 2 — The roadmap tier: detector + `buildRoadmapIndex` + scaffold ⬜
+
+- `isRoadmapHub(doc)` — `execution_mode: roadmap` (+ structural fallback for the
+  check nudge). `buildRoadmapIndex(index, config)` — roadmap → child hubs, each
+  resolved through `buildRunlistIndex`/`buildCoordinationIndex`, with recursive
+  rollup + a grand total.
+- Reclassify roadmap hubs **out** of the active-plan and runlist counts in
+  `dotmd plans` / `briefing` / `health` (a new tier above the existing Runlists
+  reclassification), so they don't double-count their own children.
+- `dotmd new plan <hub> --roadmap` scaffolds a roadmap hub (mutually exclusive
+  with `--runlist`/`--coordination`/`--lite`/`--audit`). HELP + `check` nudge.
+
+### Phase 3 — `dotmd roadmap` / `roadmaps` views + nesting ⬜
+
+- `dotmd roadmap [<hub>]` — render one roadmap: child runlists with `done/total`,
+  each child's own next-pickup `→`, and the grand total. `--json`.
+- `dotmd roadmaps` — dashboard over all roadmap hubs (mirrors `dotmd runlists`).
+- `dotmd plans` nests child runlists under their roadmap hub (one more fold level).
+
+### Phase 4 — `dotmd roadmap next` — cross-runlist next-pickup ⬜
+
+Walk the roadmap's child hubs in order; resolve each one's next-pickup (existing
+sprint/coordination resolvers); pick up the first startable plan across the whole
+roadmap. The "what do I do next across the entire platform?" verb. If every child
+hub is parked/done, emit a roadmap-aware error listing each hub + its blocker.
+
+### Phase 5 — Horizon grouping (optional flavor) + closeout ⬜
+
+If a roadmap body has `## Now / ## Next / ## Later / ## Icebox` sections that
+bucket its child runlists, group the `dotmd roadmap` view by those (else group by
+order/domain). Strictly additive over Phases 1–4. Final: CLAUDE.md ⇄ SKILL.md
+lockstep block update (the canonical workflow gains the tier-3 verbs), full test
+pass, dogfood `dotmd-forward` (migrate it to `execution_mode: roadmap`).
 
 ## Open Questions
 
-- **Horizon as body sections vs. a `horizon:` frontmatter field on children?**
-  Sections keep it prose-first (coordination-hub-like); a field makes it queryable
-  (`dotmd query --horizon now`) but adds taxonomy.
-- **Does "roadmap" risk confusion with "coordination hub"?** Three hub-ish concepts
-  is a lot. Part of Phase 0 is deciding whether roadmap *replaces/absorbs* the
-  coordination hub rather than adding alongside it.
+- ~~**Horizon as body sections vs. a `horizon:` frontmatter field?**~~ **Resolved:**
+  body sections (Phase 5), prose-first like coordination hubs. No new taxonomy —
+  and horizon is optional flavor anyway, so a queryable field isn't worth the tax.
+- ~~**Does "roadmap" risk confusion with "coordination hub"? Does it replace it?**~~
+  **Resolved:** roadmap sits *above* the coordination hub, it does not replace it.
+  The platform proves both tiers are needed (24 coordination hubs + 1 hub over
+  them). Detection is explicit (`execution_mode: roadmap`), so no ambiguity.
 - **Time-dated milestones** (Q3, dates) vs. relative horizons (now/next/later)?
-  Relative is lower-maintenance and matches the solo-dev + Claude audience.
+  Deferred — horizons are optional flavor (Phase 5). Relative stays the default
+  (lower-maintenance, matches the solo-dev + Claude audience).
+- **NEW — structural auto-detect vs. explicit only?** Phase 2 ships explicit
+  `execution_mode: roadmap` + a `check` *nudge* for hub-of-hubs. Open whether to
+  ever auto-promote; leaning no (explicit beats magic for a primitive).
 
 ## Version History
 
+- **2026-06-29T21:03:50Z** Status: awaiting → in-session — Platform eval flips Phase 0: the prematurity finding was scoped to dotmd's own repo (1 runlist), but the consuming repo (beyond/platform) has 28 coordination-hub runlists + 1120 plans + a hand-built master-runlist hub composing 24 of them in prose — tier-3 composition + rollup is justified, not premature. User chose FULL PRIMITIVE (axis-corrected): build around DOMAIN composition + done/total rollup + nested dashboard + cross-runlist next-pickup; horizon buckets demoted to optional flavor (the platform organizes by module, not now/next/later).
 - **2026-06-29T12:42:13Z** Status: in-session → awaiting — Phase 0 ruled preset-not-primitive on technical merits; awaiting the user's build-scope call (A defer / B minimal preset / C full primitive — all written into the Phase 0 section).
 - **2026-06-29T11:37:11Z** Started (active → in-session).
 - **2026-06-29T10:16:19Z** Status: queued-after → active — Predecessor Track 2 (runlist mutation) shipped — runlists are now mutable, so the queued-after gate is satisfied. Ready to pick up; first step is still the Phase 0 earn-its-keep ruling (preset vs. primitive).
