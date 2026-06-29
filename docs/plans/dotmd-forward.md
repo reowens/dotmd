@@ -2,7 +2,7 @@
 type: plan
 status: active
 created: 2026-06-29T05:44:40Z
-updated: 2026-06-29T05:44:40Z
+updated: 2026-06-29T09:58:03Z
 surfaces:
 modules:
 domain:
@@ -15,7 +15,7 @@ related_plans:
   - "> dotmd-roadmap-layer.md"
 related_docs:
 current_state: Coordination hub for dotmd's forward roadmap, derived from a 3-researcher forward audit on 2026-06-29 (trajectory/parked-ideas, feature-surface maturity, rough-edges/tensions). The core is mature and the deck is otherwise drained; the path forward is to harden where it silently breaks, finish the one half-built feature (runlists), and dogfood drift-detection on dotmd's own plugin — not to add speculative features.
-next_step: Pick up Track 1 (dotmd-durability-debt) — the only track that should jump the usual "wait for a real ask" queue because it's silent-correctness risk. `dotmd runlist next docs/plans/dotmd-forward.md`.
+next_step: Track 1 shipped+archived; Track 2 (runlist mutation) shipped, left partial (Phase 5 deferred). Next pickup is Track 3 (dotmd-plugin-skill-drift) — `dotmd runlist next docs/plans/dotmd-forward.md`. Track 4 (roadmap-layer) stays queued-after Track 2.
 execution_mode: coordination
 ---
 
@@ -45,8 +45,8 @@ graph pick it up. -->
 
 | # | Plan | Why / gating | Status |
 |---|------|--------------|--------|
-| 1 | [Durability & correctness debt](../archived/dotmd-durability-debt.md) | Silent-failure classes (CRLF/Windows blindness, untested frontmatter-mutating modules). The one track that jumps the "wait for an ask" queue — it's risk, not enhancement. No gating. | active |
-| 2 | [Runlist mutation](dotmd-runlist-mutation.md) | The live feature frontier: runlists are read-only, so adding/reordering children means hand-editing the array — contradicts dotmd's own ethos. Where the energy already is. | planned |
+| 1 | [Durability & correctness debt](../archived/dotmd-durability-debt.md) | Silent-failure classes (CRLF/Windows blindness, untested frontmatter-mutating modules). The one track that jumps the "wait for an ask" queue — it's risk, not enhancement. No gating. | archived |
+| 2 | [Runlist mutation](dotmd-runlist-mutation.md) | The live feature frontier: runlists are read-only, so adding/reordering children means hand-editing the array — contradicts dotmd's own ethos. Where the energy already is. | partial |
 | 3 | [Plugin / skill drift guards](dotmd-plugin-skill-drift.md) | Cheap, maximally on-identity: make dotmd catch drift in its own SKILL.md ⇄ CLAUDE.md and extend self-heal to the now-real skills surface. Can interleave with 1–2. | planned |
 | 4 | [Roadmap layer](dotmd-roadmap-layer.md) | A tier *above* runlists, organized by time/priority horizon — what this hub had to improvise. **Gated:** queued-after #2; composing runlists needs them first-class + mutable first. Start with the earn-its-keep ruling (preset vs. primitive). | queued-after |
 
@@ -68,4 +68,5 @@ Pull any of these only on a real ask — listing so they're not silently lost:
 
 ## Version History
 
+- **2026-06-29T09:58:03Z** Track 1 archived, Track 2 shipped (0.65.0) + left partial; refreshed ranked-queue statuses + next_step so the hub points at Track 3. (0.65.1 shipped the parked-status next-pickup fix that makes the `→` advance past Track 2's partial on its own.)
 - **2026-06-29T05:44:40Z** Created (coordination hub) from the forward audit.
