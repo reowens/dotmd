@@ -13,7 +13,6 @@
 | Doc | Status |
 |-----|--------|
 | [Dotmd Plugin / Skill Drift Guards](plans/dotmd-plugin-skill-drift.md) | Planned |
-| [Dotmd Runlist Mutation](plans/dotmd-runlist-mutation.md) | Planned |
 
 ## Reference
 
@@ -24,7 +23,7 @@
 
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 62 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 63 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|
