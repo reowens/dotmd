@@ -1,8 +1,8 @@
 ---
 type: plan
-status: queued-after
+status: active
 created: 2026-06-29T06:30:29Z
-updated: 2026-06-29T06:31:13Z
+updated: 2026-06-29T10:16:19Z
 surfaces:
 modules:
 domain:
@@ -11,7 +11,7 @@ parent_plan: dotmd-forward.md
 related_plans:
 related_docs:
 current_state: A roadmap tier that sits *above* runlists, organized by time/priority horizon (now/next/later) rather than dependency order (runlist) or domain (coordination hub). The idea surfaced because the dotmd-forward hub is itself a hand-built roadmap improvised out of coordination-hub parts — evidence the existing primitive is being stretched. Queued after dotmd-runlist-mutation: composing runlists cleanly needs them to be first-class, mutable structures first.
-next_step: Don't build yet — this is queued-after the runlist-mutation work. When picked up, START with Phase 0 (the earn-its-keep decision: thin preset on the coordination hub vs. a new third-tier primitive), because everything downstream depends on that ruling.
+next_step: Unparked (Track 2 runlist-mutation shipped, so runlists are now mutable). START with Phase 0 — the earn-its-keep decision: thin preset on the coordination hub vs. a new third-tier primitive. Everything downstream depends on that ruling, so don't build until it's made.
 ---
 
 # Dotmd Roadmap Layer
@@ -98,7 +98,7 @@ Render a roadmap by horizon with per-bucket contents and (if Phase 0 went
 Let a roadmap point at runlists, not just plans, and roll their done/total up into
 the horizon view. Only build if Phase 0 ruled "primitive" and ≥2 runlists exist.
 
-## Open questions
+## Open Questions
 
 - **Horizon as body sections vs. a `horizon:` frontmatter field on children?**
   Sections keep it prose-first (coordination-hub-like); a field makes it queryable
@@ -111,5 +111,6 @@ the horizon view. Only build if Phase 0 ruled "primitive" and ≥2 runlists exis
 
 ## Version History
 
+- **2026-06-29T10:16:19Z** Status: queued-after → active — Predecessor Track 2 (runlist mutation) shipped — runlists are now mutable, so the queued-after gate is satisfied. Ready to pick up; first step is still the Phase 0 earn-its-keep ruling (preset vs. primitive).
 - **2026-06-29T06:31:13Z** Status: active → queued-after — Sequenced behind dotmd-runlist-mutation — composing runlists needs them first-class + mutable first.
 - **2026-06-29T06:30:29Z** Created as a Track 2 successor (queued-after runlist-mutation).

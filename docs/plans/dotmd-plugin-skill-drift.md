@@ -1,8 +1,8 @@
 ---
 type: plan
-status: planned
+status: partial
 created: 2026-06-29T05:42:30Z
-updated: 2026-06-29T05:44:34Z
+updated: 2026-06-29T10:14:58Z
 surfaces:
 modules:
 domain:
@@ -36,23 +36,41 @@ maximally on-brand for a drift-catching tool.
 <!-- Status markers in heading text: ⬜ not started · 🟡 in progress (pickup
 targets this) · ✅ shipped · ⏭ skipped · 🚧 blocked. -->
 
-### Phase 1 — SKILL.md ⇄ CLAUDE.md drift guard ⬜
+### Phase 1 — SKILL.md ⇄ CLAUDE.md drift guard ✅
 
-Add a check (surfaced via `dotmd check`/`doctor`, or a dedicated `self-check`
-extension) that flags when the canonical workflow guidance in CLAUDE.md and
-`plugins/dotmd/skills/dotmd/SKILL.md` diverge. Decide the comparison unit first:
-a shared marked block that must match byte-for-byte (simplest, robust) vs. a
-looser "these key phrases must appear in both" heuristic. Prefer the marked-block
-approach — deterministic, no false positives.
+Shipped. Comparison unit: **marked block, whitespace-tolerant equality** (the
+deterministic, zero-false-positive option). An irreducible workflow-verb
+contract lives between `<!-- dotmd:canonical-workflow:start -->` / `:end`
+markers, duplicated byte-identically in `CLAUDE.md` and the plugin
+`plugins/dotmd/skills/dotmd/SKILL.md`. `src/skill-drift.mjs` extracts both and
+compares; it warns only when **both** files exist **and both** carry the block
+(so a user repo with its own CLAUDE.md but no plugin source never trips it). The
+per-file framing line sits *above* the start marker, so only the shared bullets
+are compared. Surfaced via `dotmd check` (`src/index.mjs` warning-only block) and
+`dotmd doctor --project` ("canonical workflow block: in sync / drifted"). 12
+tests in `test/skill-drift.test.mjs`, incl. a regression guard on the real
+committed pair.
 
-### Phase 2 — Extend self-heal to `.claude/skills/` ⬜
+### Phase 2 — Extend self-heal to `.claude/skills/` ⏭ (deferred — premature)
 
-The slash-command self-heal already sweeps retired/stale generated command files
-(banner-gated). Extend the same banner-gated sweep/refresh to `.claude/skills/`
-now that dotmd ships skills. Reuse `claude-commands.mjs`'s banner-detection so
-hand-authored skills are never touched.
+**Earn-its-keep ruling: deferred as premature automation.** The `.claude/commands/`
+sweep exists because dotmd *used to* generate per-repo command files and must
+clean up that legacy. Skills have no such legacy: dotmd ships skills via the
+**plugin package** (`plugins/dotmd/skills/`), has **zero** code that scaffolds a
+repo's `.claude/skills/`, and never stamps the `<!-- dotmd-generated: -->` banner
+on a skill file. A banner-gated sweep of `.claude/skills/` would therefore match
+nothing — teardown for a generation path that doesn't and never did exist (YAGNI;
+same call the project made on Track 2 Phase 5). The premise "now that dotmd ships
+skills" conflates *plugin-bundled* skills with *scaffolded* skills. Revisit only
+if dotmd ever starts scaffolding+banner-stamping skill files into repos — at
+which point the teardown ships *with* that generation, not ahead of it. (A
+separate, genuinely-useful idea — warn when a hand-copied `.claude/skills/dotmd/`
+shadows the plugin skill — is a different feature, risks false positives on
+intentional overrides, and isn't clearly needed; not built.)
 
 ## Version History
 
+- **2026-06-29T10:14:58Z** Status: in-session → partial — Phase 1 (SKILL.md ⇄ CLAUDE.md drift guard via marked block) shipped. Phase 2 (sweep .claude/skills/) deferred as premature — dotmd never scaffolds or banner-stamps skill files, so the sweep would be dead code; revisit only if skill-scaffolding ever lands.
+- **2026-06-29T10:06:09Z** Started (planned → in-session).
 - **2026-06-29T05:44:34Z** Status: active → planned.
 - **2026-06-29T05:42:30Z** Created as roadmap Track 3.
