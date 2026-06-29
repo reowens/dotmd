@@ -135,6 +135,31 @@ Fix (pick one): README note that the plugin requires the global install; or let
 1, then 2 + 3 (both cheap), then 4, then 5. #1 is the only one that actively
 degrades every session in affected repos.
 
+## Closeout
+
+All five onboarding-audit findings shipped; plan archived at CLI v0.64.2.
+
+- **#1** brownfield `staleDays` warning — fixed (37f0008 / 04ec581): resolver only
+  validates user-authored `staleDays` keys; `generateDetectedConfig` emits a scoped
+  block.
+- **#2** `dotmd update` discoverability — `update` added to `help all` Setup
+  (bin/dotmd.mjs) + an `### Updating` subsection under Install (README); postinstall
+  nudge already pointed at `--plugin-only` (37f0008).
+- **#3** plugin hint gating — `runInit` gates on `likelyClaudeUser`
+  (project `.claude/` **or** `~/.claude/`), so greenfield repos see it (37f0008).
+- **#4** devDep breaks the plugin — README Install blockquote spells out the
+  global-install requirement (37f0008). The `dotmd-hook` `node_modules/.bin`
+  fallback was the "pick one" alternative and was **deliberately declined** (doc
+  note is the lower-risk fix). Left as an optional future follow-up.
+- **#5** small ones — README documents `npx dotmd-cli init`;
+  `generateDetectedConfig` now emits `taxonomy.modules` symmetrically with
+  `surfaces` (+ init.test.mjs case); postinstall already conditional on `claude`
+  being on PATH.
+
+**Follow-up (optional, not queued):** `dotmd-hook` fallback to
+`./node_modules/.bin/dotmd` so a devDep-only + plugin user gets working
+priming/guarding instead of the "CLI isn't installed" hint.
+
 ## Version History
 
 - **2026-06-29T02:46:14Z** Archived — All 5 findings shipped. This session: #2 (update in help-all Setup + README ### Updating subsection) and #5 (npx try-before-install in README, taxonomy.modules emitted by generateDetectedConfig + test). #1/#3/#4 + #2 postinstall landed earlier in 37f0008. Declined: dotmd-hook node_modules/.bin fallback (README note is the chosen fix per finding's 'pick one').
