@@ -156,7 +156,7 @@ surfaced as a `dotmd check` nudge rather than auto-promoted.
 already resolves children + body-order `nextPickup`. Phase 1 brings coordination
 hubs up to parity (rollup), then `buildRoadmapIndex` composes both.
 
-### Phase 1 — Rollup for coordination hubs ⬜  *(independently shippable)*
+### Phase 1 — Rollup for coordination hubs ✅  *(independently shippable)*
 
 Extend `buildCoordinationIndex` (`src/runlist.mjs`) so each hub carries
 `total / doneCount / parkedCount` over its resolved `related_plans` children
@@ -165,7 +165,7 @@ in `dotmd runlists`, the `dotmd plans` Runlists section, and `dotmd health`'s
 Runlists tally — replacing/augmenting the fuzzy "N related". On the platform this
 alone turns 28 opaque hubs into 28 progress bars. Tests + docs.
 
-### Phase 2 — The roadmap tier: detector + `buildRoadmapIndex` + scaffold ⬜
+### Phase 2 — The roadmap tier: detector + `buildRoadmapIndex` + scaffold ✅
 
 - `isRoadmapHub(doc)` — `execution_mode: roadmap` (+ structural fallback for the
   check nudge). `buildRoadmapIndex(index, config)` — roadmap → child hubs, each
@@ -177,27 +177,35 @@ alone turns 28 opaque hubs into 28 progress bars. Tests + docs.
 - `dotmd new plan <hub> --roadmap` scaffolds a roadmap hub (mutually exclusive
   with `--runlist`/`--coordination`/`--lite`/`--audit`). HELP + `check` nudge.
 
-### Phase 3 — `dotmd roadmap` / `roadmaps` views + nesting ⬜
+### Phase 3 — `dotmd roadmap` / `roadmaps` views + nesting ✅
 
 - `dotmd roadmap [<hub>]` — render one roadmap: child runlists with `done/total`,
   each child's own next-pickup `→`, and the grand total. `--json`.
 - `dotmd roadmaps` — dashboard over all roadmap hubs (mirrors `dotmd runlists`).
 - `dotmd plans` nests child runlists under their roadmap hub (one more fold level).
 
-### Phase 4 — `dotmd roadmap next` — cross-runlist next-pickup ⬜
+### Phase 4 — `dotmd roadmap next` — cross-runlist next-pickup ✅
 
 Walk the roadmap's child hubs in order; resolve each one's next-pickup (existing
 sprint/coordination resolvers); pick up the first startable plan across the whole
 roadmap. The "what do I do next across the entire platform?" verb. If every child
 hub is parked/done, emit a roadmap-aware error listing each hub + its blocker.
 
-### Phase 5 — Horizon grouping (optional flavor) + closeout ⬜
+### Phase 5 — Closeout ✅ (horizon grouping ⏭ deliberately deferred)
 
-If a roadmap body has `## Now / ## Next / ## Later / ## Icebox` sections that
-bucket its child runlists, group the `dotmd roadmap` view by those (else group by
-order/domain). Strictly additive over Phases 1–4. Final: CLAUDE.md ⇄ SKILL.md
-lockstep block update (the canonical workflow gains the tier-3 verbs), full test
-pass, dogfood `dotmd-forward` (migrate it to `execution_mode: roadmap`).
+**Done:** CLAUDE.md "Roadmaps (tier-3)" subsection + the three-tier diagram;
+SKILL.md parity line (the marked canonical-workflow lockstep block was untouched —
+roadmap is navigation, not plan-lifecycle, so `dotmd check`'s drift guard stays
+green); full test pass (1289); dogfooded by migrating `dotmd-forward` itself to
+`execution_mode: roadmap` (now renders in the `Roadmaps` tier, `dotmd-forward 1/5`).
+
+**Horizon grouping ⏭ deferred (not built).** The axis correction in Phase 0
+demoted now/next/later to optional flavor; building a horizon-grouped view for a
+domain-organized consumer (the platform has zero horizon-shaped hubs) would repeat
+the exact prematurity Phase 0 ruled against. Build it only when a horizon-organized
+roadmap actually appears. The `## Now/Next/Later/Icebox` scaffold hint already ships
+in the `--roadmap` template, so authoring one is possible; only the *grouped render*
+is deferred.
 
 ## Open Questions
 

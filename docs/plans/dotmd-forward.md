@@ -17,7 +17,7 @@ related_plans:
 related_docs:
 current_state: Coordination hub for dotmd's forward roadmap, derived from a 3-researcher forward audit on 2026-06-29 (trajectory/parked-ideas, feature-surface maturity, rough-edges/tensions). The core is mature and the deck is otherwise drained; the path forward is to harden where it silently breaks, finish the one half-built feature (runlists), and dogfood drift-detection on dotmd's own plugin — not to add speculative features.
 next_step: Tracks 1–3 done (1 archived; 2 & 3 shipped+partial — each deferred a premature tail Phase). Next and last pickup is Track 4 (dotmd-roadmap-layer), now unparked to active since its Track 2 gate shipped — START with its Phase 0 earn-its-keep ruling (preset vs. primitive) before building anything.
-execution_mode: coordination
+execution_mode: roadmap
 ---
 
 # Dotmd Forward
@@ -70,6 +70,7 @@ Pull any of these only on a real ask — listing so they're not silently lost:
 
 ## Version History
 
+- **2026-06-29** Migrated `execution_mode: coordination` → `roadmap` — dogfooding Track 4's shipped tier-3 primitive. This hub IS dotmd's forward roadmap; it now renders in the `Roadmaps` tier (`dotmd roadmap`) with a rolled-up `done/total` over its tracks (1/5: durability-debt archived; the rest live), instead of as a flat coordination hub. (Its children are plans, not runlists — a valid roadmap-over-plans; the recursive rollup shines when children are themselves runlists, as on beyond/platform's master-runlist.)
 - **2026-06-29** Added candidate #5 (dotmd-baton-exit-nudge) under the "harden where it silently breaks" theme — surfaced by dogfooding: a session shipped Track 3 and released, then narrated the next pickup into chat instead of `dotmd baton`, exposing that baton-on-exit has no mechanical backstop. Planned/gated behind its own Phase 0 earn-its-keep ruling vs. Track 4.
 - **2026-06-29** Track 3 (plugin/skill drift guards) shipped Phase 1 (the SKILL.md ⇄ CLAUDE.md marked-block drift guard via `src/skill-drift.mjs`, surfaced in `dotmd check`/`doctor`) and left partial — Phase 2 (sweep `.claude/skills/`) deferred as premature since dotmd never scaffolds skill files. Track 4 (roadmap-layer) unparked queued-after → active now that its Track 2 gate (mutable runlists) shipped; it's the last pickup. Refreshed ranked-queue statuses + next_step.
 - **2026-06-29T09:58:03Z** Track 1 archived, Track 2 shipped (0.65.0) + left partial; refreshed ranked-queue statuses + next_step so the hub points at Track 3. (0.65.1 shipped the parked-status next-pickup fix that makes the `→` advance past Track 2's partial on its own.)
