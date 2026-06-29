@@ -10,8 +10,8 @@ audience: internal
 parent_plan:
 related_plans:
 related_docs:
-current_state: "Item #1 (runlist/coordination-hub scaffolding) shipped: `dotmd new plan <hub> --runlist a,b,c` and `--coordination`. Items #2 (sample content) and #3 (template polish) remain."
-next_step: "Item #2 — author a worked runlist example in SKILL.md/README (recommended), and decide whether to add an opt-in `dotmd init --with-examples`."
+current_state: "Items #1 (runlist/coordination scaffolding) and #2a (worked runlist example in README + SKILL.md) shipped. #2b (`dotmd init --with-examples`) deliberately declined — the docs example covers onboarding without polluting a real repo. #3 (template polish: `--lite` + audit/findings variant) remains."
+next_step: "Item #3 — add a `--lite`/`--minimal` plan variant (Problem → Phases → Version History) and an audit/findings template variant (Problem → Findings (ranked) → Suggested order → Open Questions) to `dotmd new`."
 ---
 
 # Template & Scaffolding Improvements (Runlists, Samples, Polish)
@@ -78,7 +78,19 @@ Open questions:
 Effort: medium. Touches `src/new.mjs` (template + arg parsing), help text in
 `bin/dotmd.mjs`, the plugin SKILL.md, and tests.
 
-### 2. No worked sample plan / sample runlist anywhere [onboarding win]
+### 2. No worked sample plan / sample runlist anywhere [onboarding win] — ✅ (a) SHIPPED 2026-06-28, (b) declined
+
+> **Shipped (a).** A worked end-to-end runlist example now lives in the README's
+> Runlists section (scaffold → `dotmd runlist` → `runlist next`, with real
+> captured output) and a compact version in the plugin SKILL.md. Pure docs — no
+> live sample plan committed to this repo's `docs/plans/` (avoids dogfooding
+> pollution in real `dotmd plans` output).
+>
+> **Declined (b) `dotmd init --with-examples`.** The docs example achieves the
+> onboarding goal with zero new surface and no cleanup burden. A scaffold-into-
+> `docs/plans/` flag would add a flag + generator + tests and leave the user with
+> sample plans to delete from their real plan list. Reconsider only if newcomers
+> report the docs example isn't enough. (c) golden fixture not pursued either.
 
 Nothing in the repo, plugin, or `init` shows a filled-in plan or a runlist hub +
 children end-to-end. SKILL.md names the runlist commands but shows no example.
@@ -130,6 +142,11 @@ subset.
 
 ## Version History
 
+- **2026-06-28** Item #2 shipped (a) / decided (b) — worked end-to-end runlist
+  example added to README (Runlists section) + plugin SKILL.md, using real
+  captured `dotmd new --runlist` / `dotmd runlist [next]` output. Declined
+  `dotmd init --with-examples` (b): docs example covers onboarding without
+  committing a live sample plan. next_step → #3 (template polish).
 - **2026-06-28** Item #1 shipped — runlist + coordination-hub scaffolding in
   `dotmd new` (flag-on-`new plan`, auto-scaffolded children). Resolves the
   "auto-generate children vs hub only" open question (auto). next_step → #2.
