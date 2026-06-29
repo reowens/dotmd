@@ -7,12 +7,7 @@
 | Doc | Status |
 |-----|--------|
 | [Dotmd Forward](plans/dotmd-forward.md) | Active |
-
-## Planned
-
-| Doc | Status |
-|-----|--------|
-| [Dotmd Plugin / Skill Drift Guards](plans/dotmd-plugin-skill-drift.md) | Planned |
+| [Dotmd Roadmap Layer](plans/dotmd-roadmap-layer.md) | Active |
 
 ## Reference
 
@@ -23,7 +18,7 @@
 
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 64 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 65 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|
