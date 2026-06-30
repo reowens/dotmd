@@ -1,8 +1,8 @@
 ---
 type: plan
-status: planned
+status: in-session
 created: 2026-06-29T11:06:40Z
-updated: 2026-06-29T11:08:05Z
+updated: 2026-06-30T01:33:05Z
 surfaces:
 modules:
 domain:
@@ -54,16 +54,35 @@ Evidence (audited 2026-06-29):
 <!-- Status markers in heading text: ⬜ not started · 🟡 in progress (pickup
 targets this) · ✅ shipped · ⏭ skipped · 🚧 blocked. -->
 
-### Phase 0 — Earn-its-keep ruling ⬜
+### Phase 0 — Earn-its-keep ruling ✅
 
-Decide scope before building. Is the right fix the CLI closure-nudge (Phase 1),
-the guidance tightening alone (Phase 2), or both? And how does it prioritize
-against Track 4 (`dotmd-roadmap-layer`)? The project defers premature automation
-by default — but unlike Track 3 Phase 2 (dead-code teardown) and Track 2 Phase 5
-(speculative rollup), this is a *dogfood-proven* gap in an existing,
-heavily-used loop, so it likely clears the bar. Rule on it first.
+**Ruling (2026-06-30): build Phase 1 + Phase 2, keep Phase 3 deferred.** This
+clears the bar — unlike Track 3 Phase 2 (dead-code teardown) and Track 2 Phase 5
+(speculative rollup), it's a *dogfood-proven* gap in the **only** core-loop step
+with no mechanical backstop. Phase 1 (CLI closure-nudge) fires at exactly the
+moment a CLI call is already being made, needs no new Claude Code hook event, and
+mirrors the existing `set partial` reminder. Phase 2 is nearly free and the
+`skill-drift` guard keeps both surfaces in lockstep. Track-4 prioritization is
+**moot** — `dotmd-roadmap-layer` shipped in 0.67.0 and is archived; it's no
+longer competing.
 
-### Phase 1 — CLI closure-nudge (primary) ⬜
+**Trigger precision (manages the named nag-fatigue risk):** fire only on the
+*baton-less in-session release* — `set <non-terminal-stop> <plan>` where the
+plan's **old** status is `in-session` (you were actively working it) AND a live
+`next_step` remains (a known next pickup) AND no baton was saved this session
+(journal check) AND it isn't baton's own internal release. Gating on
+`old == in-session` keeps the nudge off pure triage of never-started plans, where
+no session work is owed a handoff. `archived` never reaches the nudge (routed to
+`runArchive` first), so the "suppress on fully-done" requirement is automatic.
+
+### Phase 1 — CLI closure-nudge (primary) ✅
+
+Shipped in `src/lifecycle.mjs` (`runSet`): one pre-transition frontmatter read now
+powers both the existing `partial` reminder and the new baton nudge. The nudge
+fires only on the baton-less in-session release (old status `in-session` →
+non-terminal stop, live `next_step`, no `baton` journal entry this session, not
+baton's own `viaBaton` release) and prints `dotmd baton <slug> @draft`. Covered by
+7 cases in `test/lifecycle.test.mjs` (`set — baton-on-exit nudge`).
 
 When a plan that still has a `next_step` is closed/transitioned to a non-terminal
 stop status (`set partial`/`set active`/`set awaiting`/`set blocked`, or a
@@ -76,7 +95,12 @@ fully-done (no follow-on), and don't repeat if a baton was already saved this
 session (check the journal). Risk to manage: nag fatigue — tune the trigger so
 it only fires when a handoff is genuinely owed.
 
-### Phase 2 — Canonical-block guidance (secondary) ⬜
+### Phase 2 — Canonical-block guidance (secondary) ✅
+
+Shipped: the "Close to match reality" bullet of the `dotmd:canonical-workflow`
+block now ends with "Parking a plan with a known next step? Leave a baton in the
+same breath — never narrate the next pickup into chat." — edited byte-identically
+in CLAUDE.md ⇄ SKILL.md, verified by `dotmd check` (skill-drift guard).
 
 Add the *positive* rule to the `dotmd:canonical-workflow` block (now guarded
 across CLAUDE.md ⇄ SKILL.md by `src/skill-drift.mjs`): "Closing a plan with a
@@ -96,5 +120,9 @@ practice. Documented here so the option isn't silently re-litigated.
 
 ## Version History
 
+- **2026-06-30** Phase 0 ruled (build 1+2, defer 3), Phases 1 & 2 shipped: CLI
+  baton-on-exit nudge in `runSet` + canonical-block positive close-out rule.
+  Phase 3 (Stop/SessionEnd hook) stays deferred by design.
+- **2026-06-30T01:33:05Z** Started (planned → in-session).
 - **2026-06-29T11:08:05Z** Status: active → planned — Filed from the Track 3 dogfood incident — baton-on-exit has no mechanical backstop. Candidate under the forward hub's harden-where-it-silently-breaks theme; earn-its-keep ruling (Phase 0) gates it against Track 4.
 - **2026-06-29T11:06:40Z** Created.
