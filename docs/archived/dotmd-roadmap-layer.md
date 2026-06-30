@@ -223,6 +223,23 @@ is deferred.
   `execution_mode: roadmap` + a `check` *nudge* for hub-of-hubs. Open whether to
   ever auto-promote; leaning no (explicit beats magic for a primitive).
 
+## Closeout
+
+- Shipped as dotmd-cli **0.67.0** (6 commits: `e2d0e5e` / `79d1924` / `7c2df09`
+  / `30f5568` / `f826eeb` + the archive transition). The full tier-3 roadmap
+  primitive, axis-corrected to **domain composition**.
+- Delivered: coordination-hub `done/total` rollup, `execution_mode: roadmap` +
+  recursive `buildRoadmapIndex`, `dotmd roadmap` / `roadmaps` / `roadmap next`,
+  plans/runlists/briefing/health integration, `--roadmap` scaffold, and a
+  `check` nudge for hub-of-hubs.
+- Dogfooded on `dotmd-forward` and beyond/platform's `master-runlist`
+  (100/333 across 24 runlists). Suite at 1290, `dotmd check` clean.
+- Deferred by design: horizon grouping (optional body-section flavor the
+  axis-correction demoted) and structural auto-promotion (explicit
+  `execution_mode` beats magic). No tail plan — these are documented non-goals,
+  not unfinished work. The beyond/platform `master-runlist.md` migration was
+  left uncommitted in that repo per the user's choice.
+
 ## Version History
 
 - **2026-06-29T22:46:31Z** Archived — Shipped in 0.67.0 — full tier-3 roadmap primitive (axis-corrected): coordination-hub rollup, execution_mode:roadmap + recursive buildRoadmapIndex, dotmd roadmap/roadmaps/roadmap-next, plans/runlists/briefing/health integration, --roadmap scaffold, check nudge. Dogfooded: dotmd-forward + beyond/platform master-runlist (100/333 across 24 runlists, live under global 0.67.0). Horizon grouping deferred by design (optional flavor the axis-correction demoted). Platform master-runlist.md migration left uncommitted per user.

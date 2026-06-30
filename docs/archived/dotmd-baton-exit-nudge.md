@@ -117,6 +117,23 @@ from a turn-level hook is the hard, error-prone part, and the agent is the best
 detector of its own wrap-up. Revisit only if Phases 1–2 prove insufficient in
 practice. Documented here so the option isn't silently re-litigated.
 
+## Closeout
+
+- Shipped as dotmd-cli **0.68.0** (commit `115c416`). Closes the last
+  unguarded core-loop step — baton-on-exit now has a mechanical backstop.
+- **Phase 1 (CLI nudge):** `runSet` fires a one-line "leave a baton" on the
+  baton-less in-session release (old status `in-session` → non-terminal stop,
+  live `next_step`, no `baton` journal entry this session, not baton's own
+  `viaBaton` release). One pre-transition frontmatter read now powers both this
+  and the existing `partial` reminder. Quiet by design (archive routed away,
+  triage of never-started plans skipped, prior-baton suppression).
+- **Phase 2 (guidance):** positive close-out rule added to the
+  `dotmd:canonical-workflow` block, byte-identical across CLAUDE.md ⇄ SKILL.md
+  (skill-drift guarded).
+- **Phase 3 (Stop/SessionEnd hook):** deferred by design — wrong tool (fires
+  every turn / too late). Re-litigation pre-empted in the Phases section.
+- Tests: 7 new cases in `test/lifecycle.test.mjs` (`set — baton-on-exit nudge`);
+  suite 1290 → 1297, all green. No tail work.
 
 ## Version History
 
