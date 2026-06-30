@@ -8,12 +8,6 @@
 |-----|--------|
 | [Dotmd Forward](plans/dotmd-forward.md) | Active |
 
-## Planned
-
-| Doc | Status |
-|-----|--------|
-| [Dotmd Baton Exit Nudge](plans/dotmd-baton-exit-nudge.md) | Planned |
-
 ## Reference
 
 | Doc | Status |
@@ -23,7 +17,7 @@
 
 ## Archived
 
-Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 68 archived docs:
+Archived docs are indexed by the CLI/JSON output. Showing 8 recent or high-signal highlights out of 69 archived docs:
 
 | Doc | Status Snapshot |
 |-----|-----------------|
