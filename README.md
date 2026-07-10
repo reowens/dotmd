@@ -114,7 +114,6 @@ Explicit frontmatter always wins. Body extraction is a cushion for partially-tag
 - **Scaffold** — create new docs from templates (plan, ADR, RFC, audit, design)
 - **AI summaries** — summarize docs via local MLX model or custom hook
 - **Export** — generate concatenated markdown, static HTML site, or JSON bundle
-- **Notion** — import from, export to, and bidirectionally sync with Notion databases
 - **Multi-root** — manage docs across multiple directories with a single config
 - **Context briefing** — compact summary designed for AI/LLM consumption
 - **Dry-run** — preview any mutation with `--dry-run` before committing
@@ -285,8 +284,7 @@ dotmd fix-refs               Auto-fix broken reference paths
 dotmd lint [--fix]           Check and auto-fix frontmatter issues
 dotmd rename <old> <new>     Rename doc and update references
 dotmd migrate <f> <old> <new>  Batch update a frontmatter field
-dotmd ship [patch|minor|major] Regen + commit + bump in one step
-dotmd notion <sub> [db-id]   Notion import/export/sync
+dotmd ship [patch|minor|major] Prepare allowed changes, then run npm version
 dotmd export [file]          Export docs as md, html, or json
 dotmd summary <file>         AI summary of a document
 dotmd glossary <term>        Look up domain terms + related docs
@@ -659,30 +657,6 @@ dotmd export --status active             # filtered export
 dotmd export --type plan                 # export only plans
 ```
 
-### Notion Integration
-
-```bash
-dotmd notion import <database-id>        # pull Notion database → local .md files
-dotmd notion export <database-id>        # push local docs → Notion database
-dotmd notion sync <database-id>          # bidirectional sync (newer wins)
-dotmd notion import <db-id> --force      # overwrite existing files
-dotmd notion sync <db-id> --dry-run      # preview sync actions
-```
-
-Requires `NOTION_TOKEN` env var or `notion.token` in config. Maps Notion properties (select, multi_select, date, status, people, etc.) to YAML frontmatter fields. Configure property mapping in config:
-
-```js
-export const notion = {
-  token: process.env.NOTION_TOKEN,
-  database: 'your-database-id',
-  propertyMap: {
-    'Status': 'status',
-    'Last Updated': 'updated',
-    'Tags': 'surfaces',
-  },
-};
-```
-
 ### Multi-Root
 
 Manage docs across multiple directories:
@@ -984,7 +958,7 @@ do not become stale mirrors of volatile `current_state` text. Set
 `snapshot: 'state'` if you want the older `Status Snapshot` table for live
 sections too. Archived highlights still include their historical snapshots.
 
-All exports are optional. Additional options: `context`, `display`, `presets`, `templates`, `excludeDirs`, `notion`. See [`dotmd.config.example.mjs`](dotmd.config.example.mjs) for the full reference.
+All exports are optional. Additional options: `context`, `display`, `presets`, `templates`, and `excludeDirs`. See [`dotmd.config.example.mjs`](dotmd.config.example.mjs) for the full reference.
 
 Config discovery walks up from cwd looking for `dotmd.config.mjs` or `.dotmd.config.mjs`.
 
@@ -1062,7 +1036,6 @@ export function summarizeDiff(diffOutput, filePath) {
 - **Configurable** — statuses, taxonomy, lifecycle, validation rules, display, templates
 - **Hook system** — extend with JS functions, no plugin framework to learn
 - **AI-powered** — local MLX summaries for docs, queries, diffs, and context briefings
-- **Notion sync** — import, export, and bidirectional sync with Notion databases
 - **LLM-friendly** — `dotmd context` generates compact briefings for AI assistants
 - **Shell completion** — bash and zsh via `dotmd completions`
 

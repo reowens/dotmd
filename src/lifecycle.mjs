@@ -10,6 +10,7 @@ import { green, dim } from './color.mjs';
 import { isInteractive, promptChoice } from './prompt.mjs';
 import { buildCard, renderCard } from './pickup-card.mjs';
 import { walkSections, findSection } from './section.mjs';
+import { authorizeManagedDestination, authorizeManagedSource, authorizeManagedSweep } from './managed-path.mjs';
 
 function findFileRoot(filePath, config) {
   const roots = config.docsRoots || [config.docsRoot];
@@ -145,14 +146,16 @@ export async function runStatus(argv, config, opts = {}) {
 
   if (!input) { die('Usage: dotmd status <file> <new-status>'); }
 
-  const filePath = resolveDocArg(input, config);
+  let filePath = resolveDocArg(input, config);
+  const sourceAuthorization = authorizeManagedSource(filePath, config, { kind: 'Status source' });
+  filePath = sourceAuthorization.path;
 
   // Determine type-specific or root-specific valid statuses
   const raw = readFileSync(filePath, 'utf8');
   const { frontmatter: fmRaw } = extractFrontmatter(raw);
   const parsedFm = parseSimpleFrontmatter(fmRaw);
   const docType = asString(parsedFm.type) ?? null;
-  const fileRoot = findFileRoot(filePath, config);
+  const fileRoot = sourceAuthorization.root.lexicalPath;
   const rootLabel = path.relative(config.repoRoot, fileRoot).split(path.sep).join('/');
 
   // Build effective valid status set: type > root > global
@@ -212,30 +215,42 @@ export async function runStatus(argv, config, opts = {}) {
   const currentBucket = relSegments.length > 1 ? relSegments[0] : null;
   const isFiling = !isArchiving && !isUnarchiving && newFiledDir && currentBucket !== newFiledDir;
   const isUnfiling = !isArchiving && !isUnarchiving && !newFiledDir && oldFiledDir && currentBucket === oldFiledDir;
-  let finalPath = filePath;
+  const authorizeTarget = targetPath => authorizeManagedDestination(targetPath, config, {
+    root: sourceAuthorization.root,
+    kind: 'Status move destination',
+  }).path;
+  let targetDir = null;
+  let targetPath = null;
+  if (isArchiving) {
+    targetDir = archiveDir;
+    targetPath = authorizeTarget(uniqueArchiveTarget(targetDir, path.basename(filePath)));
+  } else if (isUnarchiving) {
+    targetPath = authorizeTarget(path.join(archiveBase, path.basename(filePath)));
+  } else if (isFiling) {
+    targetDir = path.join(filingRoot, newFiledDir);
+    targetPath = authorizeTarget(path.join(targetDir, path.basename(filePath)));
+  } else if (isUnfiling) {
+    targetPath = authorizeTarget(path.join(filingRoot, path.basename(filePath)));
+  }
+  if (targetPath && !isArchiving && existsSync(targetPath)) {
+    die(`Target already exists: ${toRepoPath(targetPath, config.repoRoot)}`);
+  }
+  let finalPath = targetPath ?? filePath;
 
   if (dryRun) {
     const prefix = dim('[dry-run]');
     process.stdout.write(`${prefix} Would update frontmatter: status: ${oldStatus ?? 'unknown'} → ${newStatus}, updated: ${today}\n`);
     if (isArchiving) {
-      const targetPath = uniqueArchiveTarget(archiveDir, path.basename(filePath));
       process.stdout.write(`${prefix} Would move: ${toRepoPath(filePath, config.repoRoot)} → ${toRepoPath(targetPath, config.repoRoot)}\n`);
-      finalPath = targetPath;
     }
     if (isUnarchiving) {
-      const targetPath = path.join(archiveBase, path.basename(filePath));
       process.stdout.write(`${prefix} Would move: ${toRepoPath(filePath, config.repoRoot)} → ${toRepoPath(targetPath, config.repoRoot)}\n`);
-      finalPath = targetPath;
     }
     if (isFiling) {
-      const targetPath = path.join(filingRoot, newFiledDir, path.basename(filePath));
       process.stdout.write(`${prefix} Would file: ${toRepoPath(filePath, config.repoRoot)} → ${toRepoPath(targetPath, config.repoRoot)}\n`);
-      finalPath = targetPath;
     }
     if (isUnfiling) {
-      const targetPath = path.join(filingRoot, path.basename(filePath));
       process.stdout.write(`${prefix} Would unfile: ${toRepoPath(filePath, config.repoRoot)} → ${toRepoPath(targetPath, config.repoRoot)}\n`);
-      finalPath = targetPath;
     }
     if (finalPath !== filePath) {
       const refCount = countRefsToUpdate(filePath, finalPath, config);
@@ -258,37 +273,25 @@ export async function runStatus(argv, config, opts = {}) {
   appendVersionHistory(filePath, note ? `${transition} — ${note}` : `${transition}.`, { createSection: Boolean(note) });
 
   if (isArchiving) {
-    mkdirSync(archiveDir, { recursive: true });
-    const targetPath = uniqueArchiveTarget(archiveDir, path.basename(filePath));
+    mkdirSync(targetDir, { recursive: true });
     const result = gitMv(filePath, targetPath, config.repoRoot);
     if (result.status !== 0) { die(result.stderr || 'git mv failed.'); }
-    finalPath = targetPath;
   }
 
   if (isUnarchiving) {
-    const targetPath = path.join(archiveBase, path.basename(filePath));
-    if (existsSync(targetPath)) { die(`Target already exists: ${toRepoPath(targetPath, config.repoRoot)}`); }
     const result = gitMv(filePath, targetPath, config.repoRoot);
     if (result.status !== 0) { die(result.stderr || 'git mv failed.'); }
-    finalPath = targetPath;
   }
 
   if (isFiling) {
-    const targetDir = path.join(filingRoot, newFiledDir);
     mkdirSync(targetDir, { recursive: true });
-    const targetPath = path.join(targetDir, path.basename(filePath));
-    if (existsSync(targetPath)) { die(`Target already exists: ${toRepoPath(targetPath, config.repoRoot)}`); }
     const result = gitMv(filePath, targetPath, config.repoRoot);
     if (result.status !== 0) { die(result.stderr || 'git mv failed.'); }
-    finalPath = targetPath;
   }
 
   if (isUnfiling) {
-    const targetPath = path.join(filingRoot, path.basename(filePath));
-    if (existsSync(targetPath)) { die(`Target already exists: ${toRepoPath(targetPath, config.repoRoot)}`); }
     const result = gitMv(filePath, targetPath, config.repoRoot);
     if (result.status !== 0) { die(result.stderr || 'git mv failed.'); }
-    finalPath = targetPath;
   }
 
   // Any of the four moves above shifts the file's directory, which breaks
@@ -363,7 +366,8 @@ export async function startPlan(argv, config, opts = {}) {
     input = candidates[idx].path;
   }
 
-  const filePath = resolveDocArg(input, config);
+  let filePath = resolveDocArg(input, config);
+  filePath = authorizeManagedSource(filePath, config, { kind: 'Plan start source' }).path;
 
   const raw = readFileSync(filePath, 'utf8');
   const { frontmatter: fmRaw, body } = extractFrontmatter(raw);
@@ -423,7 +427,9 @@ export async function startPlan(argv, config, opts = {}) {
     emitFilesFooter(touched, config);
   }
 
-  try { config.hooks.onPickup?.({ path: repoPath, oldStatus, newStatus: 'in-session' }); } catch (err) { warn(`Hook 'onPickup' threw: ${err.message}`); }
+  if (!dryRun && oldStatus !== 'in-session') {
+    try { config.hooks.onPickup?.({ path: repoPath, oldStatus, newStatus: 'in-session' }); } catch (err) { warn(`Hook 'onPickup' threw: ${err.message}`); }
+  }
 }
 
 export function runArchive(argv, config, opts = {}) {
@@ -443,9 +449,11 @@ export function runArchive(argv, config, opts = {}) {
 
   if (!input) { die('Usage: dotmd archive <file>'); }
 
-  const filePath = resolveDocArg(input, config);
+  let filePath = resolveDocArg(input, config);
+  const sourceAuthorization = authorizeManagedSource(filePath, config, { kind: 'Archive source' });
+  filePath = sourceAuthorization.path;
 
-  const archiveFileRoot = findFileRoot(filePath, config);
+  const archiveFileRoot = sourceAuthorization.root.lexicalPath;
   const relFromRoot = path.relative(archiveFileRoot, filePath);
   // Segment-membership covers both single-root (`<root>/archived/foo.md`) and
   // multi-root (`<type-root>/archived/foo.md`) layouts. The older
@@ -506,7 +514,10 @@ export function runArchive(argv, config, opts = {}) {
   // Type-aware: prompts archive under docs/prompts/archived/ by default (see
   // archiveBaseFor); plans/docs keep the shared <root>/archived/.
   const targetDir = path.join(archiveBaseFor(filePath, archiveFileRoot, asString(parsed.type), config), config.archiveDir);
-  const targetPath = uniqueArchiveTarget(targetDir, path.basename(filePath));
+  const targetPath = authorizeManagedDestination(uniqueArchiveTarget(targetDir, path.basename(filePath)), config, {
+    root: sourceAuthorization.root,
+    kind: 'Archive destination',
+  }).path;
   const oldRepoPath = toRepoPath(filePath, config.repoRoot);
   const newRepoPath = toRepoPath(targetPath, config.repoRoot);
 
@@ -636,7 +647,8 @@ export async function runSet(argv, config, opts = {}) {
   if (!newStatus) die('Usage: dotmd set <status> <path>');
   if (!input) die('Usage: dotmd set <status> <path>');
 
-  const filePath = resolveDocArg(input, config);
+  let filePath = resolveDocArg(input, config);
+  filePath = authorizeManagedSource(filePath, config, { kind: 'Set source' }).path;
 
   const inArchive = isArchivedPath(toRepoPath(filePath, config.repoRoot), config);
 
@@ -726,6 +738,7 @@ export function runBulkArchive(argv, config, opts = {}) {
 
   const unique = [...new Set(matched)].filter(f => !isArchivedPath(toRepoPath(f, config.repoRoot), config));
   if (unique.length === 0) die('No matching files found (already-archived files are excluded).');
+  authorizeManagedSweep(unique, config, { kind: 'Bulk archive source' });
 
   process.stdout.write(`${unique.length} file(s) to archive:\n`);
   for (const f of unique) {
@@ -778,6 +791,7 @@ export function runTouch(argv, config, opts = {}) {
   // --git mode: bulk-sync frontmatter dates from git history
   if (useGit) {
     const allFiles = input ? [resolveDocArg(input, config)] : collectDocFiles(config);
+    authorizeManagedSweep(allFiles, config, { kind: 'Touch --git source' });
 
     const prefix = dryRun ? dim('[dry-run] ') : '';
     let synced = 0;
@@ -820,7 +834,8 @@ export function runTouch(argv, config, opts = {}) {
 
   if (!input) { die('Usage: dotmd touch <file>\n       dotmd touch --git          Bulk-sync dates from git history'); }
 
-  const filePath = resolveDocArg(input, config);
+  let filePath = resolveDocArg(input, config);
+  filePath = authorizeManagedSource(filePath, config, { kind: 'Touch source' }).path;
 
   const today = nowIso();
 
@@ -864,6 +879,7 @@ function rewriteFrontmatterRefs(fm, docDir, oldPath, newPath, repoRoot) {
 function updateRefsAfterMove(oldPath, newPath, config) {
   const basename = path.basename(oldPath);
   const allFiles = collectDocFiles(config);
+  authorizeManagedSweep(allFiles, config, { kind: 'Reference rewrite source' });
   const touched = [];
 
   for (const docFile of allFiles) {
@@ -900,6 +916,7 @@ function updateRefsAfterMove(oldPath, newPath, config) {
 }
 
 function updateRefsFromMovedFile(oldPath, newPath, config) {
+  authorizeManagedSource(newPath, config, { kind: 'Moved document rewrite source' });
   const oldDir = path.dirname(oldPath);
   const newDir = path.dirname(newPath);
   if (oldDir === newDir) return 0;

@@ -8,6 +8,7 @@ import { runNew, readBodyInput } from './new.mjs';
 import { runSet, updateFrontmatter } from './lifecycle.mjs';
 import { resolvePromptInput } from './prompts.mjs';
 import { green, dim } from './color.mjs';
+import { authorizeManagedSource } from './managed-path.mjs';
 
 // `dotmd baton` is the one-command handoff: save the resume prompt AND release
 // the plan in a single atomic-ish verb. It exists because the three-step skill
@@ -170,6 +171,7 @@ export async function runBaton(argv, config, opts = {}) {
   let repoPath = null;
   let oldStatus = null;
   if (planPath) {
+    planPath = authorizeManagedSource(planPath, config, { kind: 'Baton plan source' }).path;
     repoPath = toRepoPath(planPath, config.repoRoot);
     const raw = readFileSync(planPath, 'utf8');
     const { frontmatter: fmRaw } = extractFrontmatter(raw);
@@ -216,7 +218,10 @@ export async function runBaton(argv, config, opts = {}) {
   if (planPath && !dryRun) {
     try {
       const promptPath = resolvePromptInput(createdSlug, config, { dieOnMiss: false });
-      if (promptPath) updateFrontmatter(promptPath, { plan: repoPath });
+      if (promptPath) {
+        authorizeManagedSource(promptPath, config, { kind: 'Baton prompt source' });
+        updateFrontmatter(promptPath, { plan: repoPath });
+      }
     } catch { /* stamping is best-effort */ }
   }
 

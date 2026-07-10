@@ -5,6 +5,7 @@ import { asString, toRepoPath, resolveDocPath, die } from './util.mjs';
 import { collectDocFiles } from './index.mjs';
 import { updateFrontmatter } from './lifecycle.mjs';
 import { bold, green, dim } from './color.mjs';
+import { authorizeManagedSweep } from './managed-path.mjs';
 
 export function runMigrate(argv, config, opts = {}) {
   const { dryRun } = opts;
@@ -52,6 +53,7 @@ export function runMigrate(argv, config, opts = {}) {
   }
 
   const matches = [];
+  authorizeManagedSweep(fileFilter ? [...fileFilter] : allFiles, config, { kind: 'Migration source' });
 
   for (const filePath of allFiles) {
     if (fileFilter && !fileFilter.has(filePath)) continue;

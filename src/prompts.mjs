@@ -2,13 +2,14 @@ import { readFileSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractFrontmatter, parseSimpleFrontmatter } from './frontmatter.mjs';
-import { asString, toRepoPath, die, resolveDocPath, isArchivedPath, currentSessionId } from './util.mjs';
+import { asString, toRepoPath, die, warn, resolveDocPath, isArchivedPath, currentSessionId } from './util.mjs';
 import { buildIndex, resolveDocArg } from './index.mjs';
 import { runQuery } from './query.mjs';
 import { runArchive, runStatus, updateFrontmatter } from './lifecycle.mjs';
 import { appendJournalEntry } from './journal.mjs';
 import { runNew } from './new.mjs';
 import { green, dim } from './color.mjs';
+import { authorizeManagedSource } from './managed-path.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
@@ -247,6 +248,7 @@ function runPromptsUse(argv, config, opts = {}) {
 
 export function consumePrompt(filePath, config, opts) {
   const { dryRun, noIndex, showFiles } = opts;
+  filePath = authorizeManagedSource(filePath, config, { kind: 'Prompt consumption source' }).path;
   const raw = readFileSync(filePath, 'utf8');
   const { frontmatter, body } = extractFrontmatter(raw);
   const parsed = parseSimpleFrontmatter(frontmatter);
@@ -308,6 +310,9 @@ function claimPromptPlan(planRef, config) {
   try { planPath = resolveDocPath(planRef, config) ?? resolveDocArg(planRef, config, { dieOnMiss: false }); }
   catch { planPath = null; }
   if (!planPath || !existsSync(planPath)) return; // link went stale (plan renamed/removed) — the resume body already printed, so stay quiet
+
+  try { planPath = authorizeManagedSource(planPath, config, { kind: 'Prompt linked plan source' }).path; }
+  catch (err) { warn(`Skipped linked plan claim: ${err.message}`); return; }
 
   let planFm;
   try { planFm = parseSimpleFrontmatter(extractFrontmatter(readFileSync(planPath, 'utf8')).frontmatter); }

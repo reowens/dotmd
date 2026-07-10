@@ -17,6 +17,7 @@ import {
 import { resolveDocArg } from './index.mjs';
 import { runlistChildContent, slugify, titleize } from './new.mjs';
 import { bold, cyan, dim, green, red, yellow } from './color.mjs';
+import { authorizeManagedDestination, authorizeManagedSource } from './managed-path.mjs';
 
 const PICKUPABLE_STATUSES = new Set(['active', 'planned', 'in-session']);
 
@@ -606,8 +607,10 @@ async function runRunlistAdd(positional, config, { dryRun, json }) {
     die('Usage: dotmd runlist add <hub-plan> <child...>  (one or more child slugs or plan paths)');
   }
 
-  const hubAbs = resolveHubInput(hubInput, config);
+  let hubAbs = resolveHubInput(hubInput, config);
   if (!hubAbs) die(`Hub plan not found: ${hubInput}`);
+  const hubAuthorization = authorizeManagedSource(hubAbs, config, { kind: 'Runlist hub source' });
+  hubAbs = hubAuthorization.path;
   const hubRepoPath = toRepoPath(hubAbs, config.repoRoot);
   const hubDir = path.dirname(hubAbs);
   const hubSlug = path.basename(hubAbs, '.md');
@@ -644,6 +647,11 @@ async function runRunlistAdd(positional, config, { dryRun, json }) {
   for (const token of childTokens) {
     pos += 1;
     const c = classifyChildToken(token, hubDir, hubSlug, pos, config);
+    if (c.kind === 'existing') {
+      authorizeManagedSource(c.abs, config, { kind: 'Runlist child source' });
+    } else {
+      authorizeManagedDestination(c.abs, config, { root: hubAuthorization.root, kind: 'Runlist child scaffold destination' });
+    }
     if (c.abs === hubAbs) { warn(`Skipping "${token}" — a hub can't list itself.`); pos -= 1; continue; }
     if (resolvedExisting.has(c.abs)) { warn(`Skipping "${token}" — already in the runlist (${c.repoPath}).`); pos -= 1; continue; }
     resolvedExisting.add(c.abs);
@@ -821,8 +829,9 @@ function clearChildParentPlan(childAbs, hubAbs, config, { dryRun }) {
 // die if it isn't a sprint hub with an array to mutate.
 function loadSprintHub(hubInput, verb, config) {
   if (!hubInput) die(`Usage: dotmd runlist ${verb} <hub-plan> <child...>`);
-  const hubAbs = resolveHubInput(hubInput, config);
+  let hubAbs = resolveHubInput(hubInput, config);
   if (!hubAbs) die(`Hub plan not found: ${hubInput}`);
+  hubAbs = authorizeManagedSource(hubAbs, config, { kind: `Runlist ${verb} hub source` }).path;
   const hubRepoPath = toRepoPath(hubAbs, config.repoRoot);
   const hubDir = path.dirname(hubAbs);
   const raw = readFileSync(hubAbs, 'utf8');
@@ -849,6 +858,15 @@ async function runRunlistRemove(positional, config, { dryRun, json, clearParent 
   }
   const newRefs = existingRefs.filter(r => !removeRefs.includes(r));
   const today = nowIso();
+  const clearTargets = [];
+  if (clearParent) {
+    for (const ref of removeRefs) {
+      const abs = resolveRefPath(ref, hubDir, config.repoRoot);
+      if (!abs) die(`Cannot clear parent_plan: runlist child does not resolve: ${ref}`);
+      const authorized = authorizeManagedSource(abs, config, { kind: 'Runlist removed child source' });
+      clearTargets.push({ ref, abs: authorized.path });
+    }
+  }
 
   if (json) {
     process.stdout.write(JSON.stringify({ hub: hubRepoPath, removed: removeRefs, runlist: newRefs, clearedParent: !!clearParent, dryRun: !!dryRun }, null, 2) + '\n');
@@ -859,9 +877,8 @@ async function runRunlistRemove(positional, config, { dryRun, json, clearParent 
 
   if (!dryRun) writeHubRunlist(hubAbs, newRefs, config, today);
   if (clearParent) {
-    for (const ref of removeRefs) {
-      const abs = resolveRefPath(ref, hubDir, config.repoRoot);
-      if (abs && clearChildParentPlan(abs, hubAbs, config, { dryRun }) && !json) {
+    for (const { abs } of clearTargets) {
+      if (clearChildParentPlan(abs, hubAbs, config, { dryRun }) && !json) {
         process.stdout.write(`${dryRun ? dim('[dry-run]') + ' ' : ''}  ${dim(`cleared parent_plan on ${toRepoPath(abs, config.repoRoot)}`)}\n`);
       }
     }

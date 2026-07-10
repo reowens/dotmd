@@ -117,7 +117,7 @@ export function buildGraph(index, config, filters = {}) {
 
 export function renderGraphText(graph, config) {
   const defaultRenderer = (g) => _renderGraphText(g, config);
-  if (config.hooks.renderGraph) {
+  if (!config._execution?.suppressSideEffects && config.hooks.renderGraph) {
     try { return config.hooks.renderGraph(graph, defaultRenderer); }
     catch (err) { warn(`Hook 'renderGraph' threw: ${err.message}`); }
   }

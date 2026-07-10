@@ -6,6 +6,7 @@ import { regenIndex } from './lifecycle.mjs';
 import { gitMv } from './git.mjs';
 import { green, dim } from './color.mjs';
 import { isInteractive, promptText } from './prompt.mjs';
+import { authorizeManagedDestination, authorizeManagedSource, authorizeManagedSweep } from './managed-path.mjs';
 
 export async function runRename(argv, config, opts = {}) {
   const { dryRun } = opts;
@@ -31,7 +32,9 @@ export async function runRename(argv, config, opts = {}) {
   }
 
   // Resolve old path
-  const oldPath = resolveDocArg(oldInput, config);
+  let oldPath = resolveDocArg(oldInput, config);
+  const sourceAuthorization = authorizeManagedSource(oldPath, config, { kind: 'Rename source' });
+  oldPath = sourceAuthorization.path;
 
   // Compute new path — cross-directory if input has slashes, same directory otherwise
   let newPath;
@@ -49,6 +52,7 @@ export async function runRename(argv, config, opts = {}) {
     die(`Target already exists: ${toRepoPath(newPath, config.repoRoot)}`);
     return;
   }
+  authorizeManagedDestination(newPath, config, { root: sourceAuthorization.root, kind: 'Rename destination' });
 
   const oldRepoPath = toRepoPath(oldPath, config.repoRoot);
   const newRepoPath = toRepoPath(newPath, config.repoRoot);
@@ -57,6 +61,7 @@ export async function runRename(argv, config, opts = {}) {
 
   // Scan for references in other docs
   const allFiles = collectDocFiles(config);
+  authorizeManagedSweep(allFiles, config, { kind: 'Rename reference rewrite source' });
   const filesToUpdate = [];
 
   for (const filePath of allFiles) {

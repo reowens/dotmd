@@ -112,8 +112,6 @@ const DEFAULTS = {
 
   glossary: null,
 
-  notion: null,
-
   // Opt-in JSONL command journal at .dotmd/journal.jsonl. Default off — agents
   // and users who want usage observability flip this on (or set DOTMD_JOURNAL=1).
   journal: false,

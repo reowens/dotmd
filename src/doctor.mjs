@@ -73,6 +73,13 @@ export function runDoctor(argv, config, opts = {}) {
     ? dim('[preview — run with --apply to write]')
     : dim('[applying changes]');
   process.stdout.write(bold('dotmd doctor') + ' ' + modeNote + '\n\n');
+  if (dryRun) {
+    const skippedHooks = ['validate', 'transformDoc', 'formatSnapshot', 'renderCheck']
+      .filter(name => typeof config.hooks?.[name] === 'function');
+    if (skippedHooks.length > 0) {
+      process.stdout.write(dim(`[preview] Custom ${skippedHooks.join(', ')} hook${skippedHooks.length === 1 ? '' : 's'} skipped; diagnostics and rendering below use built-in behavior only.\n\n`));
+    }
+  }
 
   // Step 1: Fix broken references
   process.stdout.write(bold('1. Fixing broken references...') + '\n');
@@ -126,7 +133,8 @@ export function runDoctor(argv, config, opts = {}) {
   }
 
   // Step 6: Show remaining check
-  process.stdout.write('\n' + bold('6. Remaining issues:') + '\n');
+  const issueLabel = dryRun ? '6. Remaining issues in current tree (preview fixes above were not applied):' : '6. Remaining issues:';
+  process.stdout.write('\n' + bold(issueLabel) + '\n');
   const freshIndex = buildIndex(config);
   process.stdout.write(renderCheck(freshIndex, config));
   const manual = renderManualFixes(freshIndex);

@@ -250,13 +250,6 @@ export const presets = {
 //   // },
 // };
 
-// ─── Notion ──────────────────────────────────────────────────────────────────
-// IMPORTANT: Use environment variables for tokens — never hardcode secrets in config files.
-// export const notion = {
-//   token: process.env.NOTION_TOKEN,
-//   database: process.env.NOTION_DATABASE_ID,
-// };
-
 // ─── Function Hooks ──────────────────────────────────────────────────────────
 // Hooks are optional. Each receives a default implementation it can wrap or replace.
 

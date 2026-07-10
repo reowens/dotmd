@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { resolveConfig } from '../src/config.mjs';
 import { die, warn, levenshtein, isArchivedPath, toRepoPath } from '../src/util.mjs';
-import { recordCliInvocation, recordGlobalError } from '../src/journal.mjs';
+import { recordCliInvocation, recordGlobalError, sanitizeTelemetryArgv } from '../src/journal.mjs';
 import { findRepeatFailureHint } from '../src/hints.mjs';
+import { KNOWN_COMMANDS, commandPolicy } from '../src/commands.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +25,17 @@ const QUERY_VALUE_FLAGS = new Set([
   '--domain', '--audience', '--execution-mode', '--updated-since', '--limit',
   '--sort', '--group', '--summarize-limit', '--model',
 ]);
+
+function requireCommandPolicy(command, policy) {
+  if (policy) return policy;
+  const matches = KNOWN_COMMANDS
+    .map(cmd => ({ cmd, dist: levenshtein(command, cmd) }))
+    .sort((a, b) => a.dist - b.dist);
+  if (matches[0] && matches[0].dist <= 3) {
+    die(`Unknown command: ${command}\n\nDid you mean \`dotmd ${matches[0].cmd}\`?`);
+  }
+  die(`Unknown command: ${command}\n\nRun \`dotmd --help\` for available commands.`);
+}
 
 const FLAG_SPECS = {
   plans: { flags: QUERY_FLAGS, values: QUERY_VALUE_FLAGS, subcommands: new Set(['status']) },
@@ -253,7 +265,6 @@ Create & Export:
   new <type> <name> [body]          Create doc of given type (plan, doc, prompt)
   index [--print]                   Generate/update docs.md index block
   export [--format md|html|json]    Export docs as markdown, HTML, or JSON
-  notion import|export|sync [db-id] Notion database integration
 
 Setup:
   init                              Create starter config + docs directory
@@ -460,8 +471,8 @@ Bundles the release steps into a single command:
   1. Auto-stage every dirty file matching the release allowlist
      (src/, test/, bin/, docs/, plugins/, .claude-plugin/,
      .claude/commands/, package*.json, dotmd.config*.mjs, README.md,
-     CLAUDE.md, .gitignore). Anything outside the allowlist is left
-     dirty — secrets, WIP, etc. never get bundled in.
+     CLAUDE.md, .gitignore). A real ship refuses while anything outside
+     the allowlist is dirty; dry-run reports those files without changing them.
   2. Commit with an auto-generated \`chore: release <version>\` message.
   3. Run \`npm version <bump>\` to bump package.json, tag, push, run
      the publish workflow, and reinstall locally.
@@ -474,9 +485,8 @@ Options:
 
 Defaults to patch. Pass \`minor\` or \`major\` to bump those instead.
 
-Network failures mid-bump (e.g. \`git push\` fails) leave the local
-commit + tag intact. Inspect with \`git log -1\` and rerun
-\`git push origin main --tags\` to recover.`,
+Network failures after the version tag exists are resumed with
+\`npm run release:resume\`. Never push tags or publish manually.`,
 
   set: `dotmd set <status> <file-or-slug> — change a document's status
 
@@ -902,19 +912,6 @@ Examples:
   dotmd watch              # re-run list on changes
   dotmd watch check        # re-run check on changes
   dotmd watch context      # live briefing`,
-
-  notion: `dotmd notion — Notion database integration
-
-Subcommands:
-  import <database-id>   Pull Notion database → local .md files
-  export <database-id>   Push local docs → Notion database rows
-  sync <database-id>     Bidirectional sync (merge by slug)
-
-Options:
-  --force                Overwrite existing files on import
-  --dry-run, -n          Preview without changes
-
-Requires NOTION_TOKEN env var or notion.token in config.`,
 
   export: `dotmd export — export docs as markdown, HTML, or JSON
 
@@ -1429,6 +1426,16 @@ async function main() {
   // singular/plural pairs (`plan`/`plans`, `module`/`modules`,
   // `status`/`statuses`) are deliberately kept distinct — see F20 plan.
   if (command === 'prompt') command = 'prompts';
+  const dispatchPolicy = commandPolicy(command);
+  _resolvedCommand = command;
+  const doctorSubMode = command === 'doctor' && (
+    args.includes('--statuses') || args.includes('--migrate-template')
+    || args.includes('--migrate-prompts') || args.includes('--frontmatter-fix')
+    || args.includes('--project')
+  );
+  const doctorExplicitApply = args.includes('--apply') || args.includes('--yes');
+  const effectiveDryRun = dryRun || (command === 'doctor' && !doctorSubMode && !doctorExplicitApply);
+  _suppressObservability = effectiveDryRun || command === 'hud';
 
   // Per-command help
   if (args.includes('--help') || args.includes('-h')) {
@@ -1437,13 +1444,32 @@ async function main() {
   }
 
   if (command === 'completions') {
+    requireCommandPolicy(command, dispatchPolicy);
     const { runCompletions } = await import('../src/completions.mjs');
     runCompletions(restArgs);
     return;
   }
 
-  const config = await resolveConfig(process.cwd(), explicitConfig);
+  let config;
+  try {
+    config = await resolveConfig(process.cwd(), explicitConfig);
+  } catch (err) {
+    if (command === 'guard') {
+      process.stdout.write('{}\n');
+      return;
+    }
+    throw err;
+  }
   _resolvedConfig = config;
+  const suppressSideEffects = effectiveDryRun || command === 'hud';
+  Object.defineProperty(config, '_execution', {
+    value: { dryRun, passive: command === 'hud', suppressSideEffects },
+    enumerable: false,
+  });
+  // Unknown names may still be user-defined query presets. Every built-in
+  // dispatcher branch, including mutators above the shared index path, must be
+  // present in the centralized command policy registry.
+  if (!config.presets[command]) requireCommandPolicy(command, dispatchPolicy);
 
   // Init — runInit re-resolves the config from disk internally (after any
   // starter-config write), so we don't need to pre-pass it.
@@ -1587,12 +1613,11 @@ async function main() {
   if (command === 'health') { const { runHealth } = await import('../src/health.mjs'); runHealth(restArgs, config); return; }
   if (command === 'glossary') { const { runGlossary } = await import('../src/glossary.mjs'); runGlossary(restArgs, config); return; }
   if (command === 'export') { const { runExport } = await import('../src/export.mjs'); runExport(restArgs, config, { dryRun, root: rootArg, type: typeArg }); return; }
-  if (command === 'notion') { const { runNotion } = await import('../src/notion.mjs'); await runNotion(restArgs, config, { dryRun }); return; }
 
   // Lifecycle commands
   if (command === 'hud') { const { runHud } = await import('../src/hud.mjs'); runHud(restArgs, config); return; }
-  if (command === 'guard') { const { runGuard } = await import('../src/guard.mjs'); await runGuard(restArgs, config); return; }
-  if (command === 'update') { const { runUpdate } = await import('../src/update.mjs'); runUpdate(restArgs, config); return; }
+  if (command === 'guard') { const { runGuard } = await import('../src/guard.mjs'); await runGuard(restArgs, config, { dryRun }); return; }
+  if (command === 'update') { const { runUpdate } = await import('../src/update.mjs'); runUpdate(restArgs, config, { dryRun }); return; }
   if (command === 'misuse') { const { runMisuse } = await import('../src/misuse-read.mjs'); runMisuse(restArgs, config); return; }
   if (command === 'journal') { const { runJournal } = await import('../src/journal-read.mjs'); runJournal(restArgs, config); return; }
   if (command === 'pickup' || command === 'unpickup' || command === 'release' || command === 'finish') {
@@ -1625,10 +1650,7 @@ async function main() {
     // auto-fix path — sub-modes (--statuses, --migrate-template,
     // --migrate-prompts) keep their existing "write unless --dry-run"
     // contract because they're explicit one-shots the user opted into.
-    const subMode = args.includes('--statuses') || args.includes('--migrate-template') || args.includes('--migrate-prompts') || args.includes('--frontmatter-fix') || args.includes('--project');
-    const explicitApply = args.includes('--apply') || args.includes('--yes');
-    const explicitDryRun = args.includes('--dry-run') || args.includes('-n');
-    const doctorDryRun = subMode ? dryRun : (explicitDryRun || !explicitApply);
+    const doctorDryRun = doctorSubMode ? dryRun : (dryRun || !doctorExplicitApply);
     const filtered = restArgs.filter(a => a !== '--apply' && a !== '--yes');
     const { runDoctor } = await import('../src/doctor.mjs');
     runDoctor(filtered, config, { dryRun: doctorDryRun });
@@ -1647,7 +1669,9 @@ async function main() {
   // `query`, `index --print`, ...) stay opt-out so they never mutate disk.
   const checkHasPathScope = command === 'check' && restArgs.some(arg => !arg.startsWith('-'));
   const AUTO_HEAL_INDEX_COMMANDS = new Set(['check']);
-  const index = buildIndex(config, { autoHealIndex: AUTO_HEAL_INDEX_COMMANDS.has(command) && !checkHasPathScope });
+  const index = buildIndex(config, {
+    autoHealIndex: AUTO_HEAL_INDEX_COMMANDS.has(command) && !checkHasPathScope && !dryRun,
+  });
 
   applyIndexFilters(index);
 
@@ -1677,6 +1701,31 @@ async function main() {
     const noCollapse = args.includes('--no-collapse');
     const verbose = args.includes('--verbose');
     const checkTargets = restArgs.filter(arg => !arg.startsWith('-'));
+    const skippedCheckHooks = config._execution?.suppressSideEffects
+      ? ['validate', 'transformDoc', 'formatSnapshot', 'renderCheck']
+          .filter(name => typeof config.hooks?.[name] === 'function')
+      : [];
+    const checkJson = (checkIndex) => {
+      const builtInPassed = checkIndex.errors.length === 0;
+      const complete = skippedCheckHooks.length === 0;
+      return {
+        docsScanned: checkIndex.docs.length,
+        errors: checkIndex.errors,
+        warnings: errorsOnly ? [] : checkIndex.warnings,
+        errorCount: checkIndex.errors.length,
+        warningCount: checkIndex.warnings.length,
+        passed: complete ? builtInPassed : null,
+        ...(complete ? {} : {
+          builtInPassed,
+          validationPreview: { status: 'built-in-only', skippedHooks: skippedCheckHooks },
+        }),
+      };
+    };
+    const writeCheckPreviewNote = () => {
+      if (skippedCheckHooks.length > 0) {
+        process.stdout.write(`[preview] Custom ${skippedCheckHooks.join(', ')} hook${skippedCheckHooks.length === 1 ? '' : 's'} skipped; results below cover built-in behavior only.\n`);
+      }
+    };
 
     if (fix && checkTargets.length > 0) {
       die('`dotmd check --fix` does not support path-scoped checks yet. Run `dotmd check <path>` to validate a subset, or `dotmd check --fix` to fix the whole docs tree.');
@@ -1703,15 +1752,9 @@ async function main() {
       applyIndexFilters(freshIndex);
       applyPathScopeToIndex(freshIndex, config, checkTargets);
       if (args.includes('--json')) {
-        process.stdout.write(JSON.stringify({
-          docsScanned: freshIndex.docs.length,
-          errors: freshIndex.errors,
-          warnings: errorsOnly ? [] : freshIndex.warnings,
-          errorCount: freshIndex.errors.length,
-          warningCount: freshIndex.warnings.length,
-          passed: freshIndex.errors.length === 0,
-        }, null, 2) + '\n');
+        process.stdout.write(JSON.stringify(checkJson(freshIndex), null, 2) + '\n');
       } else {
+        writeCheckPreviewNote();
         process.stdout.write('\n' + renderCheck(freshIndex, config, { errorsOnly, noCollapse, verbose }));
       }
       if (freshIndex.errors.length > 0) process.exitCode = 1;
@@ -1721,18 +1764,12 @@ async function main() {
     applyPathScopeToIndex(index, config, checkTargets);
 
     if (args.includes('--json')) {
-      process.stdout.write(JSON.stringify({
-        docsScanned: index.docs.length,
-        errors: index.errors,
-        warnings: errorsOnly ? [] : index.warnings,
-        errorCount: index.errors.length,
-        warningCount: index.warnings.length,
-        passed: index.errors.length === 0,
-      }, null, 2) + '\n');
+      process.stdout.write(JSON.stringify(checkJson(index), null, 2) + '\n');
       if (index.errors.length > 0) process.exitCode = 1;
       return;
     }
 
+    writeCheckPreviewNote();
     process.stdout.write(renderCheck(index, config, { errorsOnly, noCollapse, verbose }));
     if (index.errors.length > 0) process.exitCode = 1;
     return;
@@ -1764,6 +1801,10 @@ async function main() {
     }
     const print = args.includes('--print');
     const { renderIndexFile, writeIndex } = await import('../src/index-file.mjs');
+    if (!print) {
+      const { authorizeRepoGeneratedPath } = await import('../src/managed-path.mjs');
+      authorizeRepoGeneratedPath(config.indexPath, config, { kind: 'Generated index destination' });
+    }
     const rendered = renderIndexFile(index, config);
     if (print) {
       process.stdout.write(rendered);
@@ -1915,7 +1956,7 @@ async function main() {
           byType[doc.type].push(doc);
         }
       }
-      if (summarize) {
+      if (summarize && !config._execution?.suppressSideEffects) {
         const { summarizeDocBody } = await import('../src/ai.mjs');
         const { extractFrontmatter } = await import('../src/frontmatter.mjs');
         const { readFileSync } = await import('node:fs');
@@ -1937,6 +1978,9 @@ async function main() {
       const stale = index.docs.filter(d => d.isStale && !config.lifecycle.skipStaleFor.has(d.status));
       process.stdout.write(JSON.stringify({
         generatedAt: new Date().toISOString(),
+        ...(summarize && config._execution?.suppressSideEffects
+          ? { summaryPreview: { status: 'skipped-preview', reason: 'side-effect-free preview' } }
+          : {}),
         docsByType: Object.keys(byType).length > 0 ? byType : undefined,
         docsByStatus: byStatus,
         countsByStatus: index.countsByStatus,
@@ -1970,15 +2014,7 @@ async function main() {
     return;
   }
 
-  // Unknown command — suggest closest match
-  const { KNOWN_COMMANDS } = await import('../src/commands.mjs');
-  const matches = KNOWN_COMMANDS
-    .map(c => ({ cmd: c, dist: levenshtein(command, c) }))
-    .sort((a, b) => a.dist - b.dist);
-  if (matches[0] && matches[0].dist <= 3) {
-    die(`Unknown command: ${command}\n\nDid you mean \`dotmd ${matches[0].cmd}\`?`);
-  }
-  die(`Unknown command: ${command}\n\nRun \`dotmd --help\` for available commands.`);
+  requireCommandPolicy(command, null);
 }
 
 // F17a: opt-in JSONL journal of every CLI invocation. The dispatch tail
@@ -1987,10 +2023,13 @@ async function main() {
 // moment it's loaded, so even early dispatcher errors (after config) get
 // journaled.
 let _resolvedConfig = null;
+let _resolvedCommand = null;
+let _suppressObservability = false;
 const _startMs = Date.now();
 const _invocationArgs = process.argv.slice(2);
 
 function _journalExit(err) {
+  if (_suppressObservability || _resolvedCommand === 'hud' || _invocationArgs.includes('--dry-run') || _invocationArgs.includes('-n')) return;
   try {
     recordCliInvocation({
       config: _resolvedConfig,
@@ -2021,7 +2060,7 @@ main()
     // has already failed in this session within the lookup window. Lookup is
     // a no-op when the journal is disabled or DOTMD_NO_HINTS=1.
     try {
-      const hint = findRepeatFailureHint(_invocationArgs, _resolvedConfig);
+      const hint = findRepeatFailureHint(sanitizeTelemetryArgv(_invocationArgs), _resolvedConfig);
       if (hint) out = `${out}\n\nTip: ${hint}`;
     } catch { /* hint must never break error reporting */ }
     process.stderr.write(`${out}\n`);

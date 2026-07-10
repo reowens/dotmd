@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { capitalize, escapeTable } from './util.mjs';
 import { formatSnapshot } from './render.mjs';
+import { authorizeRepoGeneratedPath } from './managed-path.mjs';
 
 export function renderIndexFile(index, config) {
   const current = readFileSync(config.indexPath, 'utf8');
@@ -87,6 +88,7 @@ function renderIndexSnapshot(doc, config, snapshotMode) {
 }
 
 export function writeIndex(content, config) {
+  authorizeRepoGeneratedPath(config.indexPath, config, { kind: 'Generated index destination' });
   writeFileSync(config.indexPath, content, 'utf8');
 }
 
@@ -122,6 +124,7 @@ export function checkIndex(docs, config, opts = {}) {
   if (expected !== current) {
     if (autoHeal) {
       try {
+        authorizeRepoGeneratedPath(config.indexPath, config, { kind: 'Generated index destination' });
         writeFileSync(config.indexPath, expected, 'utf8');
         warnings.push({ path: config.indexPath, level: 'warning', message: 'Auto-regenerated stale index block.' });
       } catch (err) {

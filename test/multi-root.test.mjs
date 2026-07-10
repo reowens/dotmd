@@ -66,6 +66,30 @@ describe('multi-root: list', () => {
     strictEqual(planDoc.root, 'docs/plans');
     strictEqual(modDoc.root, 'docs/modules');
   });
+
+  it('assigns overlapping roots to the most specific owner and validates its root status', () => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'dotmd-overlap-root-'));
+    mkdirSync(path.join(tmpDir, '.git'));
+    mkdirSync(path.join(tmpDir, 'docs', 'plans'), { recursive: true });
+    writeFileSync(path.join(tmpDir, 'dotmd.config.mjs'), `
+      export const root = ['docs', 'docs/plans'];
+      export const statuses = {
+        rootStatuses: { 'docs/plans': ['nested-only'] },
+      };
+    `);
+    writeFileSync(path.join(tmpDir, 'docs', 'plans', 'nested.md'),
+      '---\nstatus: nested-only\nupdated: 2026-01-01\n---\n# Nested\n');
+
+    const jsonResult = run(['json']);
+    strictEqual(jsonResult.status, 0, `stderr: ${jsonResult.stderr}`);
+    const index = JSON.parse(jsonResult.stdout);
+    strictEqual(index.docs.length, 1, 'overlapping scans dedupe the document');
+    strictEqual(index.docs[0].root, 'docs/plans');
+    ok(!index.docs[0].errors.some(error => error.message.includes('Unknown status')), 'nested-root status is valid');
+
+    const checkResult = run(['check']);
+    strictEqual(checkResult.status, 0, `stdout: ${checkResult.stdout}\nstderr: ${checkResult.stderr}`);
+  });
 });
 
 describe('multi-root: --root filter', () => {

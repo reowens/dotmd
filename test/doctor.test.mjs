@@ -1,6 +1,6 @@
 import { describe, it, afterEach } from 'node:test';
 import { strictEqual, ok, deepStrictEqual } from 'node:assert';
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -104,6 +104,31 @@ describe('doctor command', () => {
 
     const after = readFileSync(docPath, 'utf8');
     strictEqual(after, before, 'file must be untouched in preview mode');
+  });
+
+  it('default preview discloses skipped custom validation and rendering hooks', () => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'dotmd-doctor-'));
+    spawnSync('git', ['init'], { cwd: tmpDir });
+    spawnSync('git', ['config', 'user.email', 'test@test.com'], { cwd: tmpDir });
+    spawnSync('git', ['config', 'user.name', 'Test'], { cwd: tmpDir });
+    mkdirSync(path.join(tmpDir, 'docs'), { recursive: true });
+    const sentinel = path.join(tmpDir, 'hook-sentinel');
+    writeFileSync(path.join(tmpDir, 'dotmd.config.mjs'), `
+      import { appendFileSync } from 'node:fs';
+      export const root = 'docs';
+      export function validate() { appendFileSync(${JSON.stringify(sentinel)}, 'validate'); return {}; }
+      export function transformDoc(doc) { appendFileSync(${JSON.stringify(sentinel)}, 'transform'); return doc; }
+      export function renderCheck(index, fallback) { appendFileSync(${JSON.stringify(sentinel)}, 'render'); return fallback(index); }
+    `);
+    writeFileSync(path.join(tmpDir, 'docs', 'a.md'), '---\nstatus: active\nupdated: 2025-01-01\n---\n# A\n');
+    spawnSync('git', ['add', '.'], { cwd: tmpDir });
+    spawnSync('git', ['commit', '-m', 'init'], { cwd: tmpDir });
+
+    const result = run(['doctor']);
+    strictEqual(result.status, 0, result.stderr);
+    ok(result.stdout.includes('Custom validate, transformDoc, renderCheck hooks skipped'), result.stdout);
+    ok(result.stdout.includes('built-in behavior only'), result.stdout);
+    ok(!existsSync(sentinel), 'preview did not invoke custom hooks');
   });
 
   it('F4: `dotmd doctor --apply` writes — shows applying banner and modifies files', () => {

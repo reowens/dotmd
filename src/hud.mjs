@@ -5,7 +5,6 @@ import { extractFrontmatter, parseSimpleFrontmatter } from './frontmatter.mjs';
 import { asString, toRepoPath, currentSessionId } from './util.mjs';
 import { dim, yellow } from './color.mjs';
 import { buildIndex } from './index.mjs';
-import { refreshStaleSlashCommands } from './claude-commands.mjs';
 import { readJournalEntries, journalFilePath, readMisuseEntries } from './journal.mjs';
 import { compareVersions } from './update.mjs';
 import { findOwnedPlan } from './baton.mjs';
@@ -231,26 +230,28 @@ export function buildMisuseRecap(config, now = Date.now()) {
 
 export function buildHud(config) {
   const prompts = findActionablePrompts(config);
+  const skippedValidationHooks = ['validate', 'transformDoc', 'formatSnapshot']
+    .filter(name => typeof config.hooks?.[name] === 'function');
 
   // Validation error count — hud's "silent when clean" contract should treat
   // `check` errors as not-clean. Without this, a SessionStart hook firing hud
   // can leave the agent with no visible signal that a check is failing.
   // `errorsOnly: true` skips warning-only cross-doc passes (git staleness,
-  // bidirectional refs, claude-commands) that hud never reads — ~6× faster on
-  // SessionStart for platform-scale corpora. Per-file validation + checkIndex
-  // still run, so the error count matches `dotmd check`'s.
-  let errors = 0;
+  // bidirectional refs, claude-commands) that hud never reads. Built-in
+  // per-file validation + checkIndex still run; user hooks are deliberately
+  // suppressed because SessionStart is passive.
+  let builtInErrors = 0;
   // `owned` answers "which plan is THIS session's?" for programmatic callers
   // (the baton flow reads it) — derived from the journal, falling back to the
   // only in-session plan. Null when there's no defensible answer.
   let owned = null;
   try {
-    // `autoHealIndex: true` mirrors `dotmd check` — drift from non-regen
-    // mutation paths (`lint --fix`, direct file edits, etc.) heals silently
-    // at SessionStart so the agent doesn't open every session with a
-    // spurious "Run `dotmd index`" error in the hud error count.
-    const index = buildIndex(config, { errorsOnly: true, autoHealIndex: true });
-    errors = index.errors.length;
+    const index = buildIndex(config, {
+      errorsOnly: true,
+      autoHealIndex: false,
+      invokeHooks: false,
+    });
+    builtInErrors = index.errors.length;
     const o = findOwnedPlan(config, index);
     if (o.plan) owned = { path: o.plan.path, title: o.plan.title ?? null, via: o.via };
   } catch { /* swallow — bad config shouldn't break the SessionStart hook */ }
@@ -258,7 +259,20 @@ export function buildHud(config) {
   const { previousSelf, fleet, recentRejections } = buildJournalSections(config);
   const misuseRecap = buildMisuseRecap(config);
 
-  return { owned, prompts, errors, previousSelf, fleet, recentRejections, misuseRecap };
+  const validationComplete = skippedValidationHooks.length === 0;
+  return {
+    owned,
+    prompts,
+    errors: validationComplete ? builtInErrors : null,
+    ...(validationComplete ? {} : {
+      builtInErrors,
+      validationPreview: { status: 'built-in-only', skippedHooks: skippedValidationHooks },
+    }),
+    previousSelf,
+    fleet,
+    recentRejections,
+    misuseRecap,
+  };
 }
 
 // Subagent primer: a spawned subagent (Explore, Plan, general-purpose) starts
@@ -305,17 +319,6 @@ export function runHud(argv, config) {
   if (!dotmdRepo && !json) return;
 
   const hud = buildHud(config);
-
-  // Clean up retired generated slash-command files (the plugin skill replaces
-  // them). Banner-gated, so hand-authored commands survive. Wrapped: teardown
-  // must never kill the SessionStart hook (would block every session). Runs for
-  // its side effect only — nothing is announced in stdout (see the primer-only
-  // contract below). Skipped in --json mode to keep the structured shape stable
-  // for programmatic callers.
-  if (!json) {
-    try { refreshStaleSlashCommands(config); }
-    catch { /* swallow — see comment above */ }
-  }
 
   if (json) {
     process.stdout.write(JSON.stringify({ ...hud, drift: drift ?? null }, null, 2) + '\n');

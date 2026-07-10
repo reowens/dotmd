@@ -86,14 +86,20 @@ export function runQuery(index, argv, config, opts = {}) {
     die('`--body` extends a keyword search into document bodies — pass `--keyword <term>` (or use `dotmd grep <term>`).');
   }
   const docs = filterDocs(index.docs, filters, config);
+  const summaryPreviewSkipped = filters.summarize && config._execution?.suppressSideEffects;
 
   if (filters.json) {
-    if (filters.summarize) {
+    if (filters.summarize && !summaryPreviewSkipped) {
       for (let i = 0; i < docs.length && i < filters.summarizeLimit; i++) {
         docs[i].aiSummary = getDocSummary(docs[i], config);
       }
     }
-    process.stdout.write(`${JSON.stringify({ filters, count: docs.length, docs }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({
+      filters,
+      count: docs.length,
+      docs,
+      ...(summaryPreviewSkipped ? { summaryPreview: { status: 'skipped-preview', reason: 'side-effect-free preview' } } : {}),
+    }, null, 2)}\n`);
     return;
   }
 
@@ -411,6 +417,7 @@ function getDocSummary(doc, config) {
     const { body } = extractFrontmatter(raw);
     if (!body?.trim()) return null;
     const meta = { title: doc.title, status: doc.status, path: doc.path };
+    if (config._execution?.suppressSideEffects) return null;
     return config.hooks.summarizeDoc
       ? config.hooks.summarizeDoc(body, meta)
       : summarizeDocBody(body, meta);
@@ -442,6 +449,9 @@ function renderQueryResults(docs, filters, config) {
   if (filters.hasNextStep) process.stdout.write('- has-next-step: true\n');
   if (filters.hasBlockers) process.stdout.write('- has-blockers: true\n');
   if (filters.checklistOpen) process.stdout.write('- checklist-open: true\n');
+  if (filters.summarize && config._execution?.suppressSideEffects) {
+    process.stdout.write('- summaries: skipped in side-effect-free preview\n');
+  }
   process.stdout.write('\n');
 
   if (docs.length === 0) { process.stdout.write('No matching docs.\n'); return; }

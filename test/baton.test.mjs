@@ -49,6 +49,7 @@ function journalArgv(argv, sid = 'test-sid') {
   const dir = path.join(tmpDir, '.dotmd');
   mkdirSync(dir, { recursive: true });
   const entry = {
+    schema: 2,
     ts: new Date().toISOString(), sid, pid: 1,
     argv, exit: 0, ms: 1, v: '0.0.0',
   };
@@ -213,6 +214,26 @@ describe('dotmd baton', () => {
     match(b2.stderr, /Baton passed/);
     ok(readFileSync(path.join(plansDir, 'kinetic.md'), 'utf8').includes('status: active'),
       'B released the claimed plan to active');
+  });
+
+  it('fresh-journal consume claim survives the outer use record for later baton ownership', () => {
+    writePlan('claimed', { status: 'active' });
+    writePlan('other', { status: 'in-session' });
+    writeFileSync(path.join(docsDir, 'prompts', 'resume-claimed.md'),
+      '---\ntype: prompt\nstatus: pending\nplan: docs/plans/claimed.md\n---\n# Resume\n\ncontinue\n');
+    const journal = path.join(tmpDir, '.dotmd', 'journal.jsonl');
+    ok(!existsSync(journal), 'precondition: no journal history');
+
+    const consume = run(['use', 'resume-claimed.md'], { sid: 'fresh-session' });
+    strictEqual(consume.status, 0, consume.stderr);
+    const entries = readFileSync(journal, 'utf8').trim().split('\n').map(JSON.parse);
+    ok(entries.some(entry => entry.argv?.join(' ') === 'set in-session docs/plans/claimed.md'));
+    ok(entries.every(entry => entry.schema === 2), 'synthetic and outer entries use the safe schema');
+
+    const baton = run(['baton', '--message', 'continue claimed'], { sid: 'fresh-session' });
+    strictEqual(baton.status, 0, baton.stderr);
+    match(baton.stderr, /Baton passed.*claimed/);
+    ok(readFileSync(path.join(plansDir, 'other.md'), 'utf8').includes('status: in-session'), 'unowned plan was untouched');
   });
 
   it('consume does not claim a plan whose link is stale (plan archived/removed)', () => {

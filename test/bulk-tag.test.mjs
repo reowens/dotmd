@@ -191,4 +191,27 @@ describe('runBulkTag', () => {
     strictEqual(after, before, 'archived file must not be tagged');
     ok(out.includes('No untagged files found'), `archived-only repo should report no candidates; got: ${out}`);
   });
+
+  it('uses the nested plans root for type inference and archive exclusion', async () => {
+    const docsDir = setup();
+    const plansDir = path.join(docsDir, 'plans');
+    const archiveDir = path.join(plansDir, 'archived');
+    mkdirSync(archiveDir, { recursive: true });
+    writeFileSync(path.join(tmpDir, 'dotmd.config.mjs'), `export const root = ['docs', 'docs/plans'];\n`);
+    const active = path.join(plansDir, 'active.md');
+    const archived = path.join(archiveDir, 'old.md');
+    writeFileSync(active, '# Active plan\n');
+    writeFileSync(archived, '# Archived plan\n');
+    const archivedBefore = readFileSync(archived, 'utf8');
+
+    const config = await resolveConfig(tmpDir);
+    captureStdout();
+    runBulkTag([], config, {});
+    releaseStdout();
+
+    const activeContent = readFileSync(active, 'utf8');
+    ok(activeContent.includes('type: plan'), `nested plans root should infer plan: ${activeContent}`);
+    ok(activeContent.includes('status: planned'), 'nested plans root should use the plan default status');
+    strictEqual(readFileSync(archived, 'utf8'), archivedBefore, 'nested archived file must remain untouched');
+  });
 });

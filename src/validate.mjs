@@ -582,9 +582,7 @@ export function validatePlanShape(doc, body, frontmatter, config) {
 
   // 4. Heading drift: case + name variants
   const headingDrift = [
-    { wrong: /^##\s+Open questions\s*$/m, right: '## Open Questions' },
     { wrong: /^##\s+(Non-goals|Out of scope|Out of Scope|out of scope)\s*$/m, right: '## Non-Goals' },
-    { wrong: /^##\s+open questions\s*$/m, right: '## Open Questions' },
   ];
   for (const { wrong, right } of headingDrift) {
     const m = body.match(wrong);

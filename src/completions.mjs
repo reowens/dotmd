@@ -58,7 +58,6 @@ const COMMAND_FLAGS = {
   misuse: ['--json', '--tail', '--by-rule', '--repo'],
   journal: ['--tail', '--errors', '--session', '--since', '--by-command', '--json'],
   new: ['--status', '--title', '--template', '--list-templates', '--root', '--message', '--body'],
-  notion: ['import', 'export', 'sync', '--force', '--dry-run'],
   export: ['--format', '--output', '--status', '--module', '--root', '--type'],
   focus: ['--json'],
   summary: ['--model', '--max-tokens', '--json'],

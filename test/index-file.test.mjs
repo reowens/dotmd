@@ -1,6 +1,6 @@
 import { describe, it, afterEach } from 'node:test';
 import { strictEqual, ok, throws } from 'node:assert';
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -189,6 +189,46 @@ describe('checkIndex', () => {
     strictEqual(after, before, 'no opt-in → no mutation');
     ok(index.errors.some(e => /stale/.test(e.message)),
       'should still surface the stale error for callers that want it');
+  });
+
+  it('check --dry-run leaves a drifted index byte-identical', () => {
+    const docsDir = setup();
+    const sentinel = path.join(tmpDir, 'hook-sentinel');
+    writeFileSync(path.join(tmpDir, 'dotmd.config.mjs'), [
+      `import { writeFileSync } from 'node:fs';`,
+      INDEX_CONFIG,
+      `export function validate() { writeFileSync(${JSON.stringify(sentinel)}, 'validate'); return {}; }`,
+      `export function transformDoc(doc) { writeFileSync(${JSON.stringify(sentinel)}, 'transform'); return doc; }`,
+      '',
+    ].join('\n'));
+    writeDoc(docsDir, 'a.md', 'status: active\nupdated: 2025-01-01', '# A\n');
+    const before = readFileSync(path.join(docsDir, 'docs.md'), 'utf8');
+    const result = run(['check', '--dry-run', '--json']);
+    ok(result.status !== null, `check should complete: ${result.stderr}`);
+    strictEqual(readFileSync(path.join(docsDir, 'docs.md'), 'utf8'), before);
+    ok(!existsSync(sentinel), 'dry-run did not invoke validation/transform hooks');
+    const output = JSON.parse(result.stdout);
+    strictEqual(output.passed, null, 'hook-incomplete validation must not report an authoritative pass');
+    strictEqual(output.validationPreview.status, 'built-in-only');
+    ok(output.validationPreview.skippedHooks.includes('validate'));
+    ok(output.validationPreview.skippedHooks.includes('transformDoc'));
+  });
+
+  it('default doctor preview does not invoke validation/transform hooks', () => {
+    const docsDir = setup();
+    const sentinel = path.join(tmpDir, 'doctor-hook-sentinel');
+    writeFileSync(path.join(tmpDir, 'dotmd.config.mjs'), [
+      `import { writeFileSync } from 'node:fs';`,
+      INDEX_CONFIG,
+      `export function validate() { writeFileSync(${JSON.stringify(sentinel)}, 'validate'); return {}; }`,
+      `export function transformDoc(doc) { writeFileSync(${JSON.stringify(sentinel)}, 'transform'); return doc; }`,
+      '',
+    ].join('\n'));
+    writeDoc(docsDir, 'a.md', 'status: active\nupdated: 2025-01-01', '# A\n');
+
+    const result = run(['doctor']);
+    strictEqual(result.status, 0, result.stderr);
+    ok(!existsSync(sentinel), 'default doctor preview invoked a hook');
   });
 
   it('auto-heal rewrites a drifted file and emits a warning', async () => {

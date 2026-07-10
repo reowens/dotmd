@@ -6,6 +6,7 @@ import { green, dim, bold } from './color.mjs';
 import { isInteractive, promptText } from './prompt.mjs';
 import { regenIndex } from './lifecycle.mjs';
 import { extractFrontmatter, parseSimpleFrontmatter, normalizeEol } from './frontmatter.mjs';
+import { authorizeManagedDestination } from './managed-path.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
@@ -757,6 +758,7 @@ export async function runNew(argv, config, opts = {}) {
   const baseDir = nameDir ? path.resolve(config.repoRoot, nameDir) : targetRoot;
   const filePath = path.join(baseDir, slug + '.md');
   const repoPath = toRepoPath(filePath, config.repoRoot);
+  const destinationAuthorization = authorizeManagedDestination(filePath, config, { kind: 'New document destination' });
 
   if (existsSync(filePath)) {
     die(`File already exists: ${repoPath}`);
@@ -766,40 +768,13 @@ export async function runNew(argv, config, opts = {}) {
 
   // Resolve runlist children from the hub slug (e.g. `extract` → hub-01-extract.md).
   const runlistChildren = runlistTokens.map((tok, i) => planChildFromToken(slug, tok, i + 1));
-  const childStatus = effective.has('planned') ? 'planned' : status;
-
-  // Generate content
-  let content;
-  const validSurfaces = config.raw?.taxonomy?.surfaces ?? (config.validSurfaces ? [...config.validSurfaces] : null);
-  const validModules = config.raw?.taxonomy?.modules ?? (config.validModules ? [...config.validModules] : null);
-  const tmplCtx = { status, title: docTitle, today, bodyInput, validSurfaces, validModules };
-  if (typeof template === 'function') {
-    content = template(name, tmplCtx);
-  } else {
-    let fm = template.frontmatter(status, today, tmplCtx);
-    if (bodyFrontmatter) fm = mergeBodyFrontmatter(fm, bodyFrontmatter, typeName);
-    // Inject the hub-shape frontmatter (runlist array / coordination marker)
-    // on top of the standard plan scaffold, then swap in a purpose-built body.
-    if (isRunlistHub) fm = mergeBodyFrontmatter(fm, { runlist: runlistChildren.map(c => c.file) }, typeName);
-    if (isCoordinationHub) fm = mergeBodyFrontmatter(fm, { execution_mode: 'coordination' }, typeName);
-    if (isRoadmap) fm = mergeBodyFrontmatter(fm, { execution_mode: 'roadmap' }, typeName);
-    let body;
-    // A full authored body (own `## Section` headings) wins over every variant
-    // skeleton too — otherwise the whole document gets nested in the builder's
-    // single slot and the skeleton is appended below it (duplicate Scope /
-    // Ranked queue / Version History). The default plan body applies the same
-    // shortcut inside template.body, so only the variant branches need it here.
-    const variantBody = isRunlistHub || isCoordinationHub || isRoadmap || isLite || isAudit;
-    const authored = variantBody ? fullBodyShortcut(docTitle, bodyInput) : null;
-    if (authored !== null) body = authored;
-    else if (isRunlistHub) body = runlistHubBody(docTitle, slug, runlistChildren, bodyInput, today);
-    else if (isCoordinationHub) body = coordinationHubBody(docTitle, bodyInput, today);
-    else if (isRoadmap) body = roadmapHubBody(docTitle, slug, bodyInput, today);
-    else if (isLite) body = litePlanBody(docTitle, bodyInput, today);
-    else if (isAudit) body = auditPlanBody(docTitle, bodyInput, today);
-    else body = template.body(docTitle, tmplCtx);
-    content = `---\n${fm}\n---\n${body}`;
+  for (const child of runlistChildren) {
+    authorizeManagedDestination(path.join(baseDir, child.file), config, {
+      root: destinationAuthorization.root,
+      kind: 'Runlist child destination',
+    });
   }
+  const childStatus = effective.has('planned') ? 'planned' : status;
 
   // When the project has >1 root and `--root` was omitted, surface the choice
   // so agents can see that an alternative root was available. Cheap visibility
@@ -820,15 +795,50 @@ export async function runNew(argv, config, opts = {}) {
     : isLite ? ' (lite plan)'
     : isAudit ? ' (audit plan)'
     : '';
+  const isCustomTemplate = Object.prototype.hasOwnProperty.call(config.raw?.templates ?? {}, typeName);
 
   if (dryRun) {
-    process.stdout.write(`${dim('[dry-run]')} Would create: ${repoPath}\n`);
+    if (isCustomTemplate) {
+      process.stdout.write(`${dim('[dry-run]')} Target: ${repoPath}\n`);
+      process.stdout.write(`${dim('[dry-run]')} Custom template rendering skipped; preview cannot confirm creation will succeed.\n`);
+    } else {
+      process.stdout.write(`${dim('[dry-run]')} Would create: ${repoPath}\n`);
+    }
     process.stdout.write(`${dim('[dry-run]')} Type: ${typeName}${hubKind}\n`);
     for (const c of runlistChildren) {
-      process.stdout.write(`${dim('[dry-run]')} Would create child: ${toRepoPath(path.join(baseDir, c.file), config.repoRoot)}\n`);
+      const childPath = path.join(baseDir, c.file);
+      const action = existsSync(childPath) ? 'Would leave existing child unchanged' : 'Would create child';
+      process.stdout.write(`${dim('[dry-run]')} ${action}: ${toRepoPath(childPath, config.repoRoot)}\n`);
     }
     if (rootHint) process.stdout.write(`${dim('[dry-run]')} ${rootHint}`);
     return;
+  }
+
+  // Generate content only for a real create. Custom template functions are
+  // user code and may have side effects, so previews stop before invoking them.
+  let content;
+  const validSurfaces = config.raw?.taxonomy?.surfaces ?? (config.validSurfaces ? [...config.validSurfaces] : null);
+  const validModules = config.raw?.taxonomy?.modules ?? (config.validModules ? [...config.validModules] : null);
+  const tmplCtx = { status, title: docTitle, today, bodyInput, validSurfaces, validModules };
+  if (typeof template === 'function') {
+    content = template(name, tmplCtx);
+  } else {
+    let fm = template.frontmatter(status, today, tmplCtx);
+    if (bodyFrontmatter) fm = mergeBodyFrontmatter(fm, bodyFrontmatter, typeName);
+    if (isRunlistHub) fm = mergeBodyFrontmatter(fm, { runlist: runlistChildren.map(c => c.file) }, typeName);
+    if (isCoordinationHub) fm = mergeBodyFrontmatter(fm, { execution_mode: 'coordination' }, typeName);
+    if (isRoadmap) fm = mergeBodyFrontmatter(fm, { execution_mode: 'roadmap' }, typeName);
+    let body;
+    const variantBody = isRunlistHub || isCoordinationHub || isRoadmap || isLite || isAudit;
+    const authored = variantBody ? fullBodyShortcut(docTitle, bodyInput) : null;
+    if (authored !== null) body = authored;
+    else if (isRunlistHub) body = runlistHubBody(docTitle, slug, runlistChildren, bodyInput, today);
+    else if (isCoordinationHub) body = coordinationHubBody(docTitle, bodyInput, today);
+    else if (isRoadmap) body = roadmapHubBody(docTitle, slug, bodyInput, today);
+    else if (isLite) body = litePlanBody(docTitle, bodyInput, today);
+    else if (isAudit) body = auditPlanBody(docTitle, bodyInput, today);
+    else body = template.body(docTitle, tmplCtx);
+    content = `---\n${fm}\n---\n${body}`;
   }
 
   // Ensure parent dir exists (templates with `dir:` may target a new subdirectory)
