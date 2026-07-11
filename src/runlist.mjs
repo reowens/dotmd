@@ -19,8 +19,7 @@ import { runlistChildContent, slugify, titleize } from './new.mjs';
 import { bold, cyan, dim, green, red, yellow } from './color.mjs';
 import { authorizeManagedDestination, authorizeManagedSource } from './managed-path.mjs';
 import { mutateFileSet, MutationConflictError } from './atomic-mutation.mjs';
-
-const PICKUPABLE_STATUSES = new Set(['active', 'planned', 'in-session']);
+import { pickupFactsForDoc } from './pickup.mjs';
 
 // A child is the runlist's NEXT PICKUP only when a session could start it right
 // now — i.e. its status is one `dotmd use` accepts. The "parked" statuses
@@ -32,8 +31,9 @@ const PICKUPABLE_STATUSES = new Set(['active', 'planned', 'in-session']);
 // never counts toward `done/total` — that tally tracks closed (archived) only.
 // This keeps the `→` marker in agreement with `runlist next`, which already
 // gates on PICKUPABLE_STATUSES.
-function isPickupable(status) {
-  return PICKUPABLE_STATUSES.has(status);
+function isPickupable(status, doc, config) {
+  if (!doc || !config) return false;
+  return pickupFactsForDoc({ ...doc, status }, config).pickupable;
 }
 
 // Build a hub/child map straight from the in-memory index — no disk IO. A doc
@@ -79,7 +79,7 @@ export function buildRunlistIndex(index, config) {
 
     // Next pickup = first child a session can actually start. Skip archived
     // (done) AND parked children alike; advance to the first pickup-able one.
-    const next = children.find(c => !c.missing && !c.archived && isPickupable(c.status)) ?? null;
+    const next = children.find(c => !c.missing && !c.archived && isPickupable(c.status, c.doc, config)) ?? null;
     hubs.set(hub.path, {
       hub,
       total: children.length,
@@ -87,7 +87,7 @@ export function buildRunlistIndex(index, config) {
       // Live-but-not-startable children (parked: blocked/partial/paused/…). Lets
       // the `dotmd plans` fold say "N parked" instead of mislabelling a hub with
       // a parked-but-unfinished child as "all archived".
-      parkedCount: children.filter(c => !c.missing && !c.archived && !isPickupable(c.status)).length,
+      parkedCount: children.filter(c => !c.missing && !c.archived && !isPickupable(c.status, c.doc, config)).length,
       children,
       nextChildPath: next?.path ?? null,
     });
@@ -174,13 +174,13 @@ export function buildCoordinationIndex(index, config) {
       if (childPaths.has(child.path)) continue;
       childPaths.add(child.path);
       const archived = archiveStatuses.has(child.status) || isArchivedPath(child.path, config);
-      children.push({ path: child.path, status: child.status ?? null, archived });
+      children.push({ path: child.path, status: child.status ?? null, archived, doc: child });
     }
     // Rollup, mirroring buildRunlistIndex: done = archived; parked = live but not
     // startable (blocked/partial/paused/awaiting/queued-after). `childCount`
     // stays an alias of `total` so existing callers (sorters, JSON) keep working.
     const doneCount = children.filter(c => c.archived).length;
-    const parkedCount = children.filter(c => !c.archived && !isPickupable(c.status)).length;
+    const parkedCount = children.filter(c => !c.archived && !isPickupable(c.status, c.doc, config)).length;
     const nextPickup = resolveHubNextPickup(doc, dir, resolveRef, archiveStatuses, config);
     hubs.set(doc.path, {
       doc,
@@ -251,8 +251,8 @@ export function buildRoadmapIndex(index, config, precomputed = {}) {
     }
     // A leaf-plan child is its own next action when it's startable.
     const archived = archiveStatuses.has(child.status) || isArchivedPath(child.path, config);
-    const parked = !archived && !isPickupable(child.status);
-    const pickupable = !archived && isPickupable(child.status);
+    const parked = !archived && !isPickupable(child.status, child, config);
+    const pickupable = !archived && isPickupable(child.status, child, config);
     return { kind: 'plan', total: 1, doneCount: archived ? 1 : 0, parkedCount: parked ? 1 : 0,
       nextPath: pickupable ? child.path : null, nextLabel: pickupable ? toSlug(child) : null };
   };
@@ -323,6 +323,7 @@ function resolveRunlistRefs(refs, hubAbsPath, config) {
         ref,
         path: repoPath,
         status: asString(childFm.status) ?? null,
+        type: asString(childFm.type) ?? null,
         // Fall back to the body H1 (like the main index) before the bare
         // filename — runlist child stubs carry their title as an H1, not a
         // `title:` field, so this keeps the synced body order list readable.
@@ -423,7 +424,7 @@ function resolveHubNextPickup(hubDoc, hubDir, resolveRef, archiveStatuses, confi
     // queued-after) — the hub's next-pickup is the first startable plan, the
     // same gate sprint runlists use, so a hub never points `→` at a child a
     // session can't actually pick up.
-    if (!isPickupable(child.status)) continue;
+    if (!isPickupable(child.status, child, config)) continue;
     return { path: child.path, status: child.status ?? null, label: coordinationChildLabel(child, hubDoc) };
   }
   return null;
@@ -485,7 +486,7 @@ function renderRunlist(hubRepoPath, children, opts = {}) {
     }
     // → marks the first child a session can actually start: skip archived and
     // parked (blocked/partial/paused/awaiting/queued-after) alike.
-    const isNext = !nextPicked && isPickupable(c.status);
+    const isNext = !nextPicked && isPickupable(c.status, c, opts.config);
     if (isNext) nextPicked = true;
     const marker = isNext ? green('→') : ' ';
     const statusTag = `[${colorStatus(c.status)}]`;
@@ -1008,7 +1009,7 @@ export async function runRunlist(argv, config, opts = {}) {
       }, null, 2) + '\n');
       return;
     }
-    process.stdout.write(renderRunlist(hubRepoPath, children, { archiveStatuses, source }));
+    process.stdout.write(renderRunlist(hubRepoPath, children, { archiveStatuses, source, config }));
     return;
   }
 
@@ -1016,7 +1017,7 @@ export async function runRunlist(argv, config, opts = {}) {
   // Skip both archived (done) and parked (blocked/partial/paused/awaiting/
   // queued-after) children: the runlist advances to the first pickup-able one,
   // so the picked target is guaranteed in a `dotmd use`-able status.
-  const target = children.find(c => !c.missing && !archiveStatuses.has(c.status) && isPickupable(c.status));
+  const target = children.find(c => !c.missing && !archiveStatuses.has(c.status) && isPickupable(c.status, c, config));
   if (!target) {
     if (children.length === 0) die(`Hub ${hubRepoPath} has empty \`runlist:\` — nothing to pick up.`);
     // Live (non-archived, non-missing) children that exist but aren't startable.

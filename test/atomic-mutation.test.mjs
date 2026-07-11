@@ -513,7 +513,7 @@ describe('concurrent lifecycle transitions', () => {
   it('serializes six transitions without truncation and preserves every history entry', async () => {
     const root = setup();
     mkdirSync(path.join(root, 'docs'));
-    writeFileSync(path.join(root, 'dotmd.config.mjs'), `export const root = 'docs';\n`);
+    writeFileSync(path.join(root, 'dotmd.config.mjs'), `export const root = 'docs';\nexport const types = { plan: { statuses: ['in-session', 'active', 'planned', 'blocked', 'partial', 'paused', 'awaiting', 'queued-after', 'reviewing', 'archived'] } };\n`);
     const plan = path.join(root, 'docs', 'plan.md');
     writeFileSync(plan, `---
 type: plan
@@ -526,7 +526,9 @@ updated: 2026-01-01T00:00:00Z
 
 - **2026-01-01T00:00:00Z** Created.
 `);
-    const statuses = ['planned', 'in-session', 'awaiting', 'partial', 'blocked', 'queued-after'];
+    // Pickup has its own exclusive ownership race semantics; this test targets
+    // ordinary status-transition serialization only.
+    const statuses = ['planned', 'reviewing', 'awaiting', 'partial', 'blocked', 'queued-after'];
     const gate = path.join(root, 'transitions.go');
     const wrapper = `
       import { existsSync, writeFileSync } from 'node:fs';
@@ -558,7 +560,7 @@ updated: 2026-01-01T00:00:00Z
     const root = setup();
     mkdirSync(path.join(root, 'docs'));
     const configPath = path.join(root, 'dotmd.config.mjs');
-    writeFileSync(configPath, `export const root = 'docs';\nexport const index = { path: 'docs/docs.md', startMarker: '<!-- START -->', endMarker: '<!-- END -->' };\n`);
+    writeFileSync(configPath, `export const root = 'docs';\nexport const types = { plan: { statuses: ['in-session', 'active', 'planned', 'blocked', 'partial', 'paused', 'awaiting', 'queued-after', 'reviewing', 'archived'] } };\nexport const index = { path: 'docs/docs.md', startMarker: '<!-- START -->', endMarker: '<!-- END -->' };\n`);
     const plan = path.join(root, 'docs', 'plan.md');
     writeFileSync(plan, `---\ntype: plan\nstatus: active\ntitle: Plan\nupdated: 2026-01-01\n---\n# Plan\n\n## Version History\n`);
     writeFileSync(path.join(root, 'docs', 'docs.md'), `# Index\n\n<!-- START -->\n\n<!-- END -->\n`);
@@ -571,7 +573,7 @@ updated: 2026-01-01T00:00:00Z
       const result = spawnSync(process.execPath, JSON.parse(process.argv[3]), { cwd: process.argv[4], stdio: 'inherit', env: process.env });
       process.exit(result.status ?? 1);
     `;
-    const statuses = ['planned', 'in-session', 'awaiting', 'partial', 'blocked', 'queued-after'];
+    const statuses = ['planned', 'reviewing', 'awaiting', 'partial', 'blocked', 'queued-after'];
     const pending = statuses.map((status, index) => {
       const ready = path.join(root, `indexed-${index}.ready`);
       const args = [bin, 'set', status, plan, '--note', `indexed-${status}`, '--config', configPath];

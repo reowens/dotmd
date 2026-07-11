@@ -291,6 +291,48 @@ export function titleize(s) {
   return s.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+export function preparePromptDocument(name, bodyInput, config, { plan = null, dryRun = false } = {}) {
+  const template = resolveTemplate('prompt', config);
+  const typeStatuses = config.typeStatuses?.get('prompt');
+  const status = template.defaultStatus && (!typeStatuses || typeStatuses.has(template.defaultStatus))
+    ? template.defaultStatus
+    : ([...(typeStatuses ?? [])][0] ?? 'pending');
+  if (!bodyInput?.trim()) die('`prompt` template requires a body.');
+  const slug = slugify(path.basename(name, '.md'));
+  const title = titleize(path.basename(name, '.md'));
+  let targetRoot = config.docsRoot;
+  let routed = false;
+  if (template.targetRoot) {
+    const match = (config.docsRoots || [config.docsRoot]).find(root => root.endsWith(template.targetRoot) || path.basename(root) === template.targetRoot);
+    if (match) { targetRoot = match; routed = true; }
+  }
+  const baseDir = template.dir && !routed ? path.join(targetRoot, template.dir) : targetRoot;
+  const filePath = path.join(baseDir, `${slug}.md`);
+  authorizeManagedDestination(filePath, config, { kind: 'Baton prompt destination' });
+  if (dryRun) return { slug, filePath, repoPath: toRepoPath(filePath, config.repoRoot), content: null };
+
+  const today = nowIso();
+  const split = splitBodyFrontmatter(bodyInput);
+  const body = split.frontmatter ? split.body : bodyInput;
+  const ctx = { status, title, today, bodyInput: body };
+  let content;
+  if (typeof template === 'function') {
+    content = template(name, ctx);
+    if (plan) {
+      const end = content.indexOf('\n---\n', 4);
+      if (!content.startsWith('---\n') || end === -1) throw new Error('Custom prompt template must return frontmatter for baton plan binding.');
+      const fm = mergeBodyFrontmatter(content.slice(4, end), { plan }, 'prompt');
+      content = `---\n${fm}${content.slice(end)}`;
+    }
+  } else {
+    let fm = template.frontmatter(status, today, ctx);
+    if (split.frontmatter) fm = mergeBodyFrontmatter(fm, split.frontmatter, 'prompt');
+    if (plan) fm = mergeBodyFrontmatter(fm, { plan }, 'prompt');
+    content = `---\n${fm}\n---\n${template.body(title, ctx)}`;
+  }
+  return { slug, filePath, repoPath: toRepoPath(filePath, config.repoRoot), content };
+}
+
 // Resolve one `--runlist` token to a scaffolded child plan: a bare slug becomes
 // `<hub>-NN-<slug>.md` (the documented runlist naming convention). `pos` is the
 // 1-based position used for the zero-padded NN prefix. Tokens must be bare slugs

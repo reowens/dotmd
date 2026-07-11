@@ -401,7 +401,7 @@ dotmd new prompt from-file @/tmp/draft.md
 
 Manage them with the `prompts` command family:
 
-Consume one with `dotmd use` — it atomically prints the body and archives the prompt so it can't be double-consumed:
+Consume one with `dotmd use`. It commits the archive/claim before writing the body to stdout, so output is at-most-once and the prompt cannot be double-consumed. If stdout fails (for example `EPIPE`), inspect the archived body with `dotmd prompts show <archived-path>`:
 
 ```bash
 dotmd use                         # consume the oldest pending prompt
@@ -436,13 +436,13 @@ Statuses: `pending` (drafted, awaiting a session), `held` (saved but parked unde
 dotmd baton @/tmp/draft.md        # plan mode: a plan is in-session
 ```
 
-In plan mode, baton does the whole closeout in one call:
+In plan mode, baton does the whole closeout in one atomic cooperating transaction:
 
 1. Saves a resume prompt named `resume-<plan-slug>` (collision-safe: `-2`, `-3`, …) under `docs/prompts/` with `status: pending`.
 2. Releases the plan: one status flip, `in-session` → `active` by default (`--status paused|awaiting|partial|blocked` to override, `--note "why"` to record the reason in `## Version History`).
 3. Prints the exact `git commit` command for the plan's frontmatter change — the prompt stays out of the pathspec, because saved prompts are session-local.
 
-Baton resolves *your* plan via the command journal (or takes it explicitly: `dotmd baton <plan-file> @draft`), falling back to the only in-session plan.
+Baton resolves *your* plan only from the local, gitignored ownership record (or takes it explicitly: `dotmd baton <plan-file> @draft`). Journal entries and global in-session counts never grant ownership; zero, ambiguous, corrupt, or stale records require an explicit path or recovery.
 
 No plan involved? Slug mode saves the prompt and touches nothing else:
 
@@ -691,9 +691,11 @@ dotmd bulk archive docs/old-*.md -n               # preview
 
 ### Open & Closeout
 
-Status is just frontmatter. There's no checkout, lock, or lease — opening a
-plan, transitioning it, and closing it are all plain status writes (archive
-also moves the file).
+Plan lifecycle is frontmatter plus local, gitignored ownership under `.dotmd/`.
+`dotmd use` and `dotmd set in-session` claim a plan for an authoritative host
+session; status/history and ownership changes use atomic cooperating path locks.
+Claude Code and OpenCode session IDs are detected automatically. Other hosts
+must set `DOTMD_SESSION_ID`; anonymous ownership mutations fail closed.
 
 ```bash
 dotmd use docs/plans/my-plan.md          # mark in-session + print the plan card
@@ -705,8 +707,13 @@ dotmd archive docs/plans/my-plan.md      # fully shipped: archive + move + updat
 dotmd archive docs/plans/my-plan.md --closeout-template   # also inject ## Closeout skeleton
 ```
 
-`in-session` is a status like any other — `dotmd set <status> <file>` writes it
-to the file's frontmatter and does nothing else.
+Leaving `in-session` atomically releases ownership. No-target `set`/`baton`
+works only with exactly one valid plan owned by the current session and never
+falls back to a global in-session plan. Pickup hooks are delivered at least
+once with a stable `operationId`; hooks must deduplicate external effects.
+Delivery uses a short persisted token lease: live or unverifiable process owners
+are never reclaimed by age, while an expired lease may retry only after its
+recorded process identity is demonstrably dead.
 
 Add `--note "why"` to any `set` or `archive` to append the reason to the doc's
 `## Version History` section in the same call (creates the section if missing) —

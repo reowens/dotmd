@@ -17,24 +17,50 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 
 const sleepBuffer = new Int32Array(new SharedArrayBuffer(4));
 let tempSequence = 0;
-const PROCESS_STARTED_AT = new Date(Date.now() - Math.floor(process.uptime() * 1000)).toISOString();
 
-function processStartIdentity(pid) {
+export function processStartIdentity(pid) {
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
     const afterName = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/);
     return `linux:${afterName[19]}`;
-  } catch {
-    return null;
-  }
+  } catch { /* non-Linux or proc unavailable */ }
+  try {
+    const started = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', timeout: 1000 }).trim();
+    return started ? `ps:${started}` : null;
+  } catch { return null; }
 }
 
-const PROCESS_START_IDENTITY = processStartIdentity(process.pid);
+export const PROCESS_STARTED_AT = new Date(Date.now() - Math.floor(process.uptime() * 1000)).toISOString();
+export const PROCESS_START_IDENTITY = processStartIdentity(process.pid);
+
+export function currentProcessOwner() {
+  return {
+    pid: process.pid,
+    hostname: os.hostname(),
+    processStartedAt: PROCESS_STARTED_AT,
+    processStartIdentity: PROCESS_START_IDENTITY,
+  };
+}
+
+export function processOwnerLiveness(owner) {
+  if (!owner || owner.hostname !== os.hostname() || !Number.isInteger(owner.pid)) return 'unverifiable';
+  try {
+    process.kill(owner.pid, 0);
+    const currentStart = processStartIdentity(owner.pid);
+    if (!owner.processStartIdentity || !currentStart) return 'unverifiable';
+    return owner.processStartIdentity === currentStart ? 'live' : 'dead';
+  } catch (err) {
+    if (err?.code === 'ESRCH') return 'dead';
+    if (err?.code === 'EPERM') return 'live';
+    return 'unverifiable';
+  }
+}
 
 export class MutationConflictError extends Error {
   constructor(message) {
@@ -139,13 +165,7 @@ function lockOwner(lockPath) {
 }
 
 function ownerIsDemonstrablyDead(owner) {
-  if (!owner || owner.hostname !== os.hostname() || !Number.isInteger(owner.pid)) return false;
-  try {
-    process.kill(owner.pid, 0);
-    const currentStart = processStartIdentity(owner.pid);
-    return Boolean(owner.processStartIdentity && currentStart && owner.processStartIdentity !== currentStart);
-  }
-  catch (err) { return err?.code === 'ESRCH'; }
+  return processOwnerLiveness(owner) === 'dead';
 }
 
 function reclaimLock(lockPath) {
@@ -192,11 +212,8 @@ export function withPathLocks(filePaths, options, callback) {
           const ownerTemp = path.join(lockPath, `.owner-${token}.tmp`);
           writeFileSync(ownerTemp, JSON.stringify({
             token,
-            pid: process.pid,
-            hostname: os.hostname(),
+            ...currentProcessOwner(),
             createdAt: new Date().toISOString(),
-            processStartedAt: PROCESS_STARTED_AT,
-            processStartIdentity: PROCESS_START_IDENTITY,
             path: canonical,
           }) + '\n', { flag: 'wx' });
           renameSync(ownerTemp, path.join(lockPath, 'owner.json'));
@@ -453,16 +470,22 @@ export function createFileExclusive(filePath, content, options) {
 }
 
 export function moveFileAtomic(sourcePath, targetPath, render, options) {
-  const { repoRoot, finalize, rollbackFinalize, testHooks, updates = [] } = options;
-  return withPathLocks([sourcePath, targetPath, ...updates.map(item => item.path)], options, () => {
+  const { repoRoot, finalize, rollbackFinalize, testHooks, updates = [], creations = [] } = options;
+  return withPathLocks([sourcePath, targetPath, ...updates.map(item => item.path), ...creations.map(item => item.path)], options, () => {
     testHooks?.beforeMoveSnapshot?.({ sourcePath, targetPath });
     const source = snapshotFile(sourcePath);
     const targetDir = path.dirname(targetPath);
     const newContent = typeof render === 'function' ? render(source.content, source) : render;
     const preparedUpdates = updates.map(item => {
       const snapshot = snapshotFile(item.path);
-      return { ...item, snapshot, content: item.render(snapshot.content, snapshot) };
+      if (item.expectedContent !== undefined && snapshot.content !== item.expectedContent) {
+        throw new MutationConflictError(`File changed while the move mutation set was being prepared: ${snapshot.path}`);
+      }
+      return { ...item, snapshot, content: item.render ? item.render(snapshot.content, snapshot) : item.content };
     }).filter(item => item.content !== item.snapshot.content);
+    for (const item of creations) {
+      if (existsSync(item.path)) throw new MutationConflictError(`Destination already exists: ${path.resolve(item.path)}`);
+    }
     const prepared = writeCompleteTemp(targetPath, newContent, source.identity.mode);
     const transactionId = `${process.pid}-${Date.now()}-${tempSequence++}`;
     const backup = path.join(path.dirname(sourcePath), `.${path.basename(sourcePath)}.dotmd-move-${transactionId}`);
@@ -473,6 +496,7 @@ export function moveFileAtomic(sourcePath, targetPath, render, options) {
     let publishedSnapshot;
     let backupSnapshot;
     const committedUpdates = [];
+    const committedCreations = [];
     let finalizeAttempted = false;
     let pastRecoveryBoundary = false;
     try {
@@ -522,6 +546,10 @@ export function moveFileAtomic(sourcePath, targetPath, render, options) {
           throw err;
         }
       }
+      for (const item of creations) {
+        const committed = createFileExclusive(item.path, item.content, { ...options, mode: item.mode, locked: true });
+        committedCreations.push({ ...item, committed });
+      }
       testHooks?.afterMovePublish?.({ backup, sourcePath, targetPath });
 
       if (finalize) {
@@ -539,6 +567,7 @@ export function moveFileAtomic(sourcePath, targetPath, render, options) {
         err.message += '\nMove content and Git index are committed; backup deletion could not be durably synced. No rollback was attempted after the recovery boundary.';
         throw err;
       }
+      for (const item of committedCreations.reverse()) removeCommitted(item.committed, err, 'created move companion');
       for (const item of committedUpdates.reverse()) restoreUpdate(item.committed, item.snapshot, err);
       if (published) {
         removeCommitted(publishedSnapshot, err, 'published move target');

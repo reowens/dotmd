@@ -242,8 +242,8 @@ export function buildHud(config) {
   // suppressed because SessionStart is passive.
   let builtInErrors = 0;
   // `owned` answers "which plan is THIS session's?" for programmatic callers
-  // (the baton flow reads it) — derived from the journal, falling back to the
-  // only in-session plan. Null when there's no defensible answer.
+  // (the baton flow reads it) — derived only from a valid durable ownership
+  // record. Null when ownership is absent, stale, corrupt, or ambiguous.
   let owned = null;
   try {
     const index = buildIndex(config, {
@@ -284,7 +284,7 @@ export function buildHud(config) {
 const SUBAGENT_PRIMER = [
   'dotmd manages this repo\'s plans/docs/prompts (markdown + YAML frontmatter).',
   'Verbs: plans|briefing | query <filters> | use [<file>] | set <status> <file> | new <type> <slug> | archive <file>.',
-  'Do NOT: cat/read a docs/prompts/*.md (use `dotmd use <file>` — it prints + archives atomically);',
+  'Do NOT: cat/read a docs/prompts/*.md (use `dotmd use <file>` — archive/claim commits before at-most-once output);',
   'git add/commit a prompt (they are session-local, often gitignored); hand-edit a `status:` field (use `dotmd set`).',
 ].join('\n');
 
@@ -335,14 +335,13 @@ export function runHud(argv, config) {
   // next session ever picked up):
   //   - pending prompts: the previous session queued work for THIS one;
   //     consuming it is the very next action.
-  //   - an in-session plan attributed to this sid via the journal: this
+  //   - an in-session plan attributed to this sid via durable ownership: this
   //     session (pre-compaction) owns it and should continue or hand it off.
-  //     The single-in-session fallback is deliberately NOT printed — at
-  //     SessionStart that plan likely belongs to another live session.
+  //     Global in-session counts never provide a fallback.
   // The misuse recap stays for the same reason: a repeat-offense rule means
   // the primer alone isn't landing, so name the habit to break.
   process.stdout.write(dim('dotmd: plans|briefing  set <status> [<file>]  new <type> <slug>  use [<file>]  archive <file>  baton [<slug>] <@draft|-> (save a resume prompt; releases the in-session plan if any)  (use [no-arg] → oldest pending prompt)') + '\n');
-  if (hud.owned && hud.owned.via === 'journal') {
+  if (hud.owned && hud.owned.via === 'ownership') {
     process.stdout.write(yellow(`[dotmd] in-session (yours): ${hud.owned.path} — continue it; hand off with \`dotmd baton @/tmp/draft.md\` before stopping.`) + '\n');
   }
   if (hud.prompts.length > 0) {

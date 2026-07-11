@@ -1,18 +1,19 @@
-import { readFileSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, statSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { extractFrontmatter, parseSimpleFrontmatter } from './frontmatter.mjs';
-import { asString, toRepoPath, die, warn, resolveDocPath, isArchivedPath, currentSessionId, nowIso } from './util.mjs';
+import { asString, toRepoPath, die, resolveDocPath, isArchivedPath } from './util.mjs';
 import { buildIndex, resolveDocArg } from './index.mjs';
 import { runQuery } from './query.mjs';
-import { runArchive, runStatus, updateFrontmatterAtomic } from './lifecycle.mjs';
-import { appendJournalEntry } from './journal.mjs';
+import { completePlanClaim, renderLifecycleMutation, runArchive, runStatus } from './lifecycle.mjs';
 import { runNew } from './new.mjs';
 import { green, dim } from './color.mjs';
 import { authorizeManagedSource } from './managed-path.mjs';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+import {
+  authoritativeSessionId,
+  classifyPlanPickup,
+  preparePlanClaim,
+  readPlanOwnership,
+} from './pickup.mjs';
 
 // `resume` is an alias for `use` — agents reach for "resume" when continuing a
 // session; `use` reads as internal mechanics. Both names stay valid; the
@@ -186,14 +187,14 @@ export function pendingPromptsOldestFirst(config) {
     });
 }
 
-function runPromptsNext(argv, config, opts = {}) {
+async function runPromptsNext(argv, config, opts = {}) {
   const queue = pendingPromptsOldestFirst(config);
   if (queue.length === 0) {
     die('No pending prompts.');
   }
   const head = queue[0];
   if (!head.abs) die(`Could not resolve path: ${head.doc.path}`);
-  consumePrompt(head.abs, config, opts);
+  return consumePrompt(head.abs, config, opts);
 }
 
 // Resolve user input to a prompt path. Tries (in order): exact path,
@@ -237,16 +238,16 @@ export function resolvePromptInput(input, config, options = {}) {
   return null;
 }
 
-function runPromptsUse(argv, config, opts = {}) {
+async function runPromptsUse(argv, config, opts = {}) {
   const input = argv.find(a => !a.startsWith('-'));
   if (!input) die('Usage: dotmd prompts use <file-or-slug>');
   const noIndex = argv.includes('--no-index') || opts.noIndex;
   const showFiles = argv.includes('--show-files') || opts.showFiles;
   const filePath = resolvePromptInput(input, config);
-  consumePrompt(filePath, config, { ...opts, noIndex, showFiles });
+  return consumePrompt(filePath, config, { ...opts, noIndex, showFiles });
 }
 
-export function consumePrompt(filePath, config, opts) {
+export async function consumePrompt(filePath, config, opts) {
   const { dryRun, noIndex, showFiles } = opts;
   filePath = authorizeManagedSource(filePath, config, { kind: 'Prompt consumption source' }).path;
   const raw = readFileSync(filePath, 'utf8');
@@ -262,6 +263,10 @@ export function consumePrompt(filePath, config, opts) {
   if (status === 'archived' || isArchivedPath(repoPath, config)) {
     die(`Already consumed: ${repoPath}`);
   }
+
+  const planRef = asString(parsed.plan);
+  let linkedClaim = null;
+  if (planRef) linkedClaim = prepareLinkedPromptClaim(planRef, config);
 
   if (dryRun) {
     const prefix = dim('[dry-run]');
@@ -281,60 +286,86 @@ export function consumePrompt(filePath, config, opts) {
   // hook crash, anything), the body must not have already gone to stdout —
   // otherwise `claude "$(dotmd prompts next)"` consumes the prompt without it
   // ever being archived, and the next session sees the same prompt as pending.
-  const archiveResult = runArchive([filePath], config, { noIndex, showFiles, out: process.stderr, testHooks: opts.testHooks });
+  if (linkedClaim?.prepared) mkdirSync(path.dirname(linkedClaim.prepared.recordPath), { recursive: true });
+  const archiveResult = runArchive([filePath], config, {
+    noIndex,
+    showFiles,
+    out: process.stderr,
+    testHooks: opts.testHooks,
+    deferIndex: Boolean(linkedClaim),
+    additionalUpdates: linkedClaim?.prepared?.updates,
+    creations: linkedClaim?.prepared?.creations,
+  });
   const consumedBody = archiveResult?.consumedBody ?? body;
-  const consumedFrontmatter = archiveResult?.consumedFrontmatter ?? parsed;
-
-  process.stdout.write(consumedBody);
-  if (!consumedBody.endsWith('\n')) process.stdout.write('\n');
 
   const consumedPath = archiveResult?.newRepoPath ?? repoPath;
+  // Consume output is at-most-once: archive/claim commits before stdout. A
+  // downstream failure cannot roll the transaction back or make it consumable
+  // again; the archived path remains available through `prompts show`.
+  await writeConsumedBody(consumedBody, consumedPath, opts.writeBody, linkedClaim?.repoPath);
+  if (linkedClaim) {
+    try {
+      completePlanClaim(linkedClaim.repoPath, config, opts);
+    } catch (err) {
+      throw new Error(`Prompt consumed and body delivered; linked claim completion remains pending for ${linkedClaim.repoPath}: ${err.message}`);
+    }
+    process.stderr.write(`${green('→ Claimed')}: ${linkedClaim.repoPath} (in-session)\n`);
+  }
   process.stderr.write(`${green('✓ Consumed')}: ${consumedPath}\n`);
-
-  // Consume = claim: a baton-created resume prompt carries `plan: <path>`.
-  // Adopt that plan for THIS session so the next `dotmd baton` (with no arg)
-  // hands it off — closing the cross-session ownership loop that otherwise dies
-  // at the prompt boundary.
-  claimPromptPlan(asString(consumedFrontmatter.plan), config);
 }
 
-// Flip the resume prompt's linked plan to in-session for this session and
-// record the ownership in the journal. The journal entry matters: baton's
-// `findOwnedPlan` reconstructs ownership from journaled `set in-session <plan>`
-// commands, and the outer `use <prompt>` argv can't tie a prompt ref to a plan
-// — so without this synthetic entry the claim would be invisible to baton (and,
-// with the misfire gate, would even make the next baton refuse).
-function claimPromptPlan(planRef, config) {
-  if (!planRef) return;
-  let planPath = null;
-  try { planPath = resolveDocPath(planRef, config) ?? resolveDocArg(planRef, config, { dieOnMiss: false }); }
-  catch { planPath = null; }
-  if (!planPath || !existsSync(planPath)) return; // link went stale (plan renamed/removed) — the resume body already printed, so stay quiet
-
-  try { planPath = authorizeManagedSource(planPath, config, { kind: 'Prompt linked plan source' }).path; }
-  catch (err) { warn(`Skipped linked plan claim: ${err.message}`); return; }
-
-  let planFm;
-  try { planFm = parseSimpleFrontmatter(extractFrontmatter(readFileSync(planPath, 'utf8')).frontmatter); }
-  catch { return; }
-  const cur = asString(planFm.status);
-  // Only claim a startable plan. Already in-session → someone's on it (don't
-  // steal); archived/terminal → the link is stale. Either way, leave it be.
-  if (!cur || cur === 'in-session' || cur === 'archived') return;
-
-  const repoPath = toRepoPath(planPath, config.repoRoot);
-  try { updateFrontmatterAtomic(planPath, { status: 'in-session', updated: nowIso() }, config, { expected: { status: cur } }); }
-  catch { return; }
+export async function writeConsumedBody(body, archivedPath, write = null, linkedPlan = null) {
+  const content = body.endsWith('\n') ? body : `${body}\n`;
   try {
-    // `v` MUST be the real CLI version: the journal rotates when a new entry's
-    // version differs from the file's first entry, so a sentinel here would shove
-    // our just-written claim into the backup file where findOwnedPlan can't see it.
-    appendJournalEntry(config, {
-      ts: new Date().toISOString(), sid: currentSessionId(), pid: process.pid,
-      argv: ['set', 'in-session', repoPath], exit: 0, ms: 0, v: pkg.version,
-    });
-  } catch { /* journal is best-effort — the status flip already landed */ }
-  process.stderr.write(`${green('→ Claimed')}: ${repoPath} (in-session)\n`);
+    if (write) {
+      const accepted = await write(content);
+      if (accepted === false) throw Object.assign(new Error('writer reported unresolved backpressure'), { code: 'BACKPRESSURE' });
+    } else {
+      await new Promise((resolve, reject) => process.stdout.write(content, err => err ? reject(err) : resolve()));
+    }
+  }
+  catch (err) {
+    const completion = linkedPlan ? ` Then complete the linked claim with \`dotmd use ${linkedPlan}\`.` : '';
+    throw new Error(`Prompt was consumed but body output failed (${err.code ?? err.message}). It will not be emitted again; recover it with \`dotmd prompts show ${archivedPath}\`.${completion}`);
+  }
+}
+
+function prepareLinkedPromptClaim(planRef, config) {
+  let planPath = resolveDocPath(planRef, config) ?? resolveDocArg(planRef, config, { dieOnMiss: false });
+  if (!planPath || !existsSync(planPath)) die(`Linked plan is missing; prompt was not consumed: ${planRef}`);
+  planPath = authorizeManagedSource(planPath, config, { kind: 'Prompt linked plan source' }).path;
+  const raw = readFileSync(planPath, 'utf8');
+  let parsed;
+  try { parsed = parseSimpleFrontmatter(extractFrontmatter(raw).frontmatter); }
+  catch { die(`Linked plan is malformed; prompt was not consumed: ${planRef}`); }
+  const repoPath = toRepoPath(planPath, config.repoRoot);
+  const sessionId = authoritativeSessionId();
+  const ownership = readPlanOwnership(repoPath, config);
+  const oldStatus = asString(parsed.status);
+  const disposition = classifyPlanPickup({
+    type: asString(parsed.type),
+    status: oldStatus,
+    validStatuses: config.typeStatuses?.get('plan') ?? config.validStatuses,
+    startableStatuses: config.lifecycle.startableStatuses,
+    terminalStatuses: config.lifecycle.terminalStatuses,
+    archiveStatuses: config.lifecycle.archiveStatuses,
+    physicallyArchived: isArchivedPath(repoPath, config),
+    ownership,
+    sessionId,
+    malformed: false,
+  });
+  if (!disposition.pickupable) die(`Linked plan cannot be claimed (${disposition.kind}); prompt was not consumed: ${repoPath}`);
+  if (disposition.kind === 'resume') return { planPath, repoPath, prepared: null };
+  const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const rendered = disposition.kind === 'start'
+    ? renderLifecycleMutation(raw, { status: 'in-session', updated: now }, `Started (${oldStatus} → in-session).`, { createSection: true })
+    : null;
+  return {
+    planPath,
+    repoPath,
+    prepared: preparePlanClaim({ filePath: planPath, sourceContent: raw, renderedContent: rendered,
+      ownership, sessionId, now, config }),
+  };
 }
 
 // Read-only peek: print the body WITHOUT consuming. The sanctioned triage path

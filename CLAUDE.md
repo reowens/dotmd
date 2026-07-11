@@ -22,7 +22,7 @@ Every document has a `type:` field in its frontmatter. Types determine which sta
 
 Each stop-status maps to a distinct **unstuck-action** — that's the test for whether the status earns its keep.
 
-- **`in-session`** — A Claude instance is actively working on this plan right now. When you start working on a plan, set it to `in-session`. It's just a frontmatter status — there's no checkout, lock, or lease.
+- **`in-session`** — An agent session is actively working on this plan right now. `dotmd use` writes the status plus a local, gitignored ownership record; another session cannot resume/release it without an explicit `--force` recovery.
 - **`active`** — Ready for a Claude session to pick up and work on.
 - **`planned`** — Queued for future work, not yet ready to execute.
 - **`blocked`** — *Unstuck-action: monitor.* External arrival on its own schedule (hardware, vendor delivery, third-party rollout). You can't speed it up.
@@ -56,7 +56,7 @@ To finish work, archive directly: `dotmd archive <plan-file>`. The legacy `done`
    - Shipped + tail deferred → `dotmd set partial <plan-file>` (reference the successor plan in the body)
    - Need more work later → `dotmd set active <plan-file>`
    - Stuck on a human decision → `dotmd set awaiting <plan-file>`
-   `set <status> <file>` just writes the new status to frontmatter — no checkout to release, no lock to clear.
+   `set <status> <file>` writes frontmatter and atomically releases local ownership when leaving `in-session`.
    Add `--note "why"` to any `set`/`archive` to append the reason to `## Version History` in the same call (creates the section if missing) — prefer it over a separate body edit. `set partial` without a note or successor link prints a reminder.
 4. To see plans: `dotmd plans` (live), `dotmd plans --status active`, `dotmd plans --status in-session`
 
@@ -69,7 +69,7 @@ dotmd baton @/tmp/draft.md        # saves resume-<plan-slug>, flips the plan
                                   # in-session → active, prints the exact git commit
 ```
 
-`--status paused|awaiting|partial|blocked` overrides the release status; `--note "why"` records the reason. Baton resolves *your* plan via the journal (or takes it explicitly: `dotmd baton <plan-file> @draft`). It is the whole closeout — no extra status changes, no `dotmd use`, no repo triage on the way out.
+`--status paused|awaiting|partial|blocked` overrides the release status; `--note "why"` records the reason. Baton resolves *your* plan from its local, gitignored ownership record (or takes it explicitly: `dotmd baton <plan-file> @draft`); journal entries and global in-session counts never grant ownership. It is the whole closeout — prompt creation, status/history, and ownership release commit together, with no extra status changes or repo triage on the way out.
 
 No plan involved? Same verb, slug mode — saves `resume-<slug>` and touches nothing else:
 
@@ -77,7 +77,7 @@ No plan involved? Same verb, slug mode — saves `resume-<slug>` and touches not
 dotmd baton <slug> @/tmp/draft.md
 ```
 
-Either way the prompt lands under `docs/prompts/<name>.md` with `status: pending`. The next session runs `dotmd hud` (the SessionStart hook), sees the pending prompt, and consumes it with `dotmd use <file>` (or `dotmd use` with no arg for the oldest). That command atomically prints the body and archives the prompt so it can't be double-consumed. To peek at a prompt without consuming it, `dotmd prompts show <file>`.
+Either way the prompt lands under `docs/prompts/<name>.md` with `status: pending`. The next session runs `dotmd hud` (the SessionStart hook), sees the pending prompt, and consumes it with `dotmd use <file>` (or `dotmd use` with no arg for the oldest). Consumption commits the archive/claim before writing the body to stdout, so output is at-most-once and the prompt cannot be double-consumed. If stdout fails, recover with `dotmd prompts show <archived-path>`.
 
 **Consume = claim (the handoff loop closes itself).** When `dotmd baton` releases a plan, it stamps the resume prompt with a `plan:` link back to that plan. Consuming such a prompt with `dotmd use` doesn't just print the body — it also **claims the linked plan for this session** (flips it to `in-session` and records the ownership), printing `→ Claimed docs/plans/<x>.md`. So the picked-up work is already `in-session` and, crucially, *this* session's later `dotmd baton` (no arg) hands off that plan automatically — you don't re-run `dotmd use <plan>` first. Only a startable plan is claimed: an already-in-session plan (someone's on it) or an archived/renamed target (stale link) is left untouched.
 

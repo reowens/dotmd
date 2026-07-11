@@ -283,7 +283,11 @@ export const presets = {
 // export function onNew({ path, status, title, template }) {}
 // export function onRename({ oldPath, newPath, referencesUpdated }) {}
 // export function onLint({ path, fixes }) {}
-// export function onPickup({ path, oldStatus, newStatus }) {}
+// Pickup hooks are delivered at least once. A retry reuses operationId, so any
+// external side effect must deduplicate by that stable ID. Delivery uses a
+// persisted process-identity lease; live/unverifiable owners are not reclaimed
+// by age, and an expired lease retries only when its owner is demonstrably dead.
+// export function onPickup({ path, oldStatus, newStatus, operationId }) {}
 
 // AI hooks — override summarization (replaces local MLX model).
 // export function summarizeDoc(body, meta) { return 'Custom summary'; }

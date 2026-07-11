@@ -64,7 +64,7 @@ function writeDoc(name, { body = 'reference material body' } = {}) {
 function run(args, env = {}) {
   return spawnSync('node', [bin, ...args, '--config', configPath], {
     cwd: tmpDir, encoding: 'utf8',
-    env: { ...process.env, ...env, NO_COLOR: '1' },
+    env: { ...process.env, DOTMD_SESSION_ID: 'use-test-session', ...env, NO_COLOR: '1' },
   });
 }
 

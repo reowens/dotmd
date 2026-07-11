@@ -55,6 +55,7 @@ const DEFAULTS = {
   },
 
   lifecycle: {
+    startableStatuses: ['active', 'planned'],
     archiveStatuses: ['archived'],
     skipStaleFor: ['archived', 'reference', 'partial', 'queued-after'],
     skipWarningsFor: ['archived', 'partial', 'queued-after'],
@@ -139,6 +140,7 @@ const VALID_CONTEXT_VALUES = new Set(['expanded', 'listed', 'counted']);
  */
 function normalizeRichStatuses(config, userConfig) {
   const derived = {
+    startableStatuses: [],
     archiveStatuses: [],
     skipStaleFor: [],
     skipWarningsFor: [],
@@ -197,6 +199,7 @@ function normalizeRichStatuses(config, userConfig) {
       }
 
       if (p.archive && !derived.archiveStatuses.includes(name)) derived.archiveStatuses.push(name);
+      if (p.startable && !derived.startableStatuses.includes(name)) derived.startableStatuses.push(name);
       if ((p.skipStale || quietImpliesSkipStale) && !derived.skipStaleFor.includes(name)) derived.skipStaleFor.push(name);
       if ((p.skipWarnings || quietImpliesSkipWarnings) && !derived.skipWarningsFor.includes(name)) derived.skipWarningsFor.push(name);
       if (p.terminal && !derived.terminalStatuses.includes(name)) derived.terminalStatuses.push(name);
@@ -239,6 +242,9 @@ function applyDerivedConfig(config, userConfig, derived) {
   }
 
   // lifecycle — each sub-key independently
+  if (!userConfig.lifecycle?.startableStatuses && derived.startableStatuses.length) {
+    config.lifecycle.startableStatuses = derived.startableStatuses;
+  }
   if (!userConfig.lifecycle?.archiveStatuses && derived.archiveStatuses.length) {
     config.lifecycle.archiveStatuses = derived.archiveStatuses;
   }
@@ -294,6 +300,15 @@ function validateConfig(userConfig, config, validStatuses, indexPath) {
   // archiveDir must be string
   if (config.archiveDir !== undefined && typeof config.archiveDir !== 'string') {
     warnings.push('Config: archiveDir must be a string.');
+  }
+
+  // Lifecycle status lists must reference configured statuses.
+  if (config.lifecycle?.startableStatuses) {
+    for (const s of config.lifecycle.startableStatuses) {
+      if (!validStatuses.has(s)) {
+        warnings.push(`Config: lifecycle.startableStatuses contains unknown status '${s}'.`);
+      }
+    }
   }
 
   // lifecycle.archiveStatuses values must exist in validStatuses
@@ -484,6 +499,7 @@ export async function resolveConfig(cwd, explicitConfigPath) {
   // Lifecycle config
   const lifecycle = config.lifecycle;
   const archiveStatuses = new Set(lifecycle.archiveStatuses);
+  const startableStatuses = new Set(lifecycle.startableStatuses ?? ['active', 'planned']);
   const skipStaleFor = new Set(lifecycle.skipStaleFor);
   const skipWarningsFor = new Set(lifecycle.skipWarningsFor);
   const terminalStatuses = new Set(lifecycle.terminalStatuses);
@@ -524,7 +540,7 @@ export async function resolveConfig(cwd, explicitConfigPath) {
     rootValidStatuses,
     staleDaysByStatus,
 
-    lifecycle: { archiveStatuses, skipStaleFor, skipWarningsFor, terminalStatuses, filedStatuses, archiveNestedTypes },
+    lifecycle: { archiveStatuses, startableStatuses, skipStaleFor, skipWarningsFor, terminalStatuses, filedStatuses, archiveNestedTypes },
 
     validSurfaces,
     validModules,

@@ -50,7 +50,7 @@ afterEach(() => {
 //   - stdout emits the command primer line (the verb cheat-sheet) plus ONLY
 //     signals that carry a direct instruction for this session: pending
 //     prompts (consume with `dotmd use`) and a journal-attributed in-session
-//     plan (continue / hand off with baton). Passive state — error counts,
+//     durably owned plan (continue / hand off with baton). Passive state — error counts,
 //     journal chatter, refresh notices — stays suppressed; those nudged
 //     agents into phantom follow-up work.
 //   - `--json` still returns the structured shape (owned/prompts/errors/
@@ -92,23 +92,19 @@ describe('dotmd hud', () => {
     ok(j.errors >= 1, 'validation errors present in --json');
   });
 
-  it('announces YOUR in-session plan when the journal attributes it to this sid', () => {
+  it('announces YOUR in-session plan when durable ownership attributes it to this sid', () => {
     const docsDir = setupProject();
-    // Journal must be on for attribution.
-    writeFileSync(path.join(tmpDir, 'dotmd.config.mjs'), `export const root = 'docs';\nexport const journal = true;\n`);
-    writeDoc(docsDir, 'mine.md', 'type: plan\nstatus: in-session\nupdated: 2025-01-01', '# Mine\n');
+    writeDoc(docsDir, 'mine.md', 'type: plan\nstatus: active\nupdated: 2025-01-01', '# Mine\n');
     writeDoc(docsDir, 'theirs.md', 'type: plan\nstatus: in-session\nupdated: 2025-01-01', '# Theirs\n');
-    const entry = { schema: 2, ts: '2025-01-02T00:00:00.000Z', sid: 'sess-A', pid: 1, argv: ['use', 'docs/mine.md'], exit: 0, ms: 1, v: '0.0.0' };
-    writeFileSync(path.join(tmpDir, '.dotmd', 'journal.jsonl'), JSON.stringify(entry) + '\n');
+    const claimed = runCli(['use', 'docs/mine.md'], { session: 'sess-A' });
+    strictEqual(claimed.status, 0, claimed.stderr);
 
     const r = runCli(['hud'], { session: 'sess-A' });
     strictEqual(r.status, 0, `hud failed: ${r.stderr}`);
     ok(r.stdout.includes('in-session (yours): docs/mine.md'), `owned plan announced; got: ${r.stdout}`);
     ok(r.stdout.includes('dotmd baton'), `handoff verb named; got: ${r.stdout}`);
 
-    // A different session sees no owned line — and crucially, the
-    // single-in-session fallback must NOT print at SessionStart (that plan
-    // likely belongs to another live session).
+    // A different session sees no owned line.
     const other = runCli(['hud'], { session: 'sess-B' });
     ok(!other.stdout.includes('in-session (yours)'), `no owned line for an unattributed sid; got: ${other.stdout}`);
   });

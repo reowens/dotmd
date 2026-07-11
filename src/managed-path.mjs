@@ -10,6 +10,27 @@ function contains(parent, child) {
   return rel === '' || (!rel.startsWith(`..${path.sep}`) && rel !== '..' && !path.isAbsolute(rel));
 }
 
+function sameNode(a, b) {
+  try {
+    const left = statSync(a, { bigint: true });
+    const right = statSync(b, { bigint: true });
+    return left.dev === right.dev && left.ino === right.ino;
+  } catch { return false; }
+}
+
+// realpath on case-insensitive macOS volumes may preserve the caller's casing.
+// Prove an alias by inode before treating it as contained; lowercase string
+// comparison alone would be unsafe on case-sensitive volumes.
+function aliasContainment(parent, child) {
+  if (contains(parent, child)) return { contained: true, relative: path.relative(parent, child) };
+  const parentParts = path.resolve(parent).split(path.sep).filter(Boolean);
+  const childParts = path.resolve(child).split(path.sep).filter(Boolean);
+  if (childParts.length < parentParts.length) return { contained: false, relative: null };
+  const childPrefix = `${path.parse(path.resolve(child)).root}${childParts.slice(0, parentParts.length).join(path.sep)}`;
+  if (!sameNode(parent, childPrefix)) return { contained: false, relative: null };
+  return { contained: true, relative: childParts.slice(parentParts.length).join(path.sep) };
+}
+
 function lexicalRootsFor(config) {
   return (config.docsRoots ?? [config.docsRoot]).map(configuredPath => ({
     configuredPath,
@@ -97,11 +118,11 @@ export function authorizeManagedSource(input, config, { kind = 'Managed mutation
   }
 
   const lexical = lexicalOwner(lexicalPath, roots);
-  if (lexical && !contains(lexical.canonicalPath, canonicalPath)) {
+  if (lexical && !aliasContainment(lexical.canonicalPath, canonicalPath).contained) {
     throw new Error(`${kind} is lexically owned by ${lexical.lexicalPath} but resolves outside that root: ${lexicalPath} -> ${canonicalPath}\nConfigured docs roots: ${rootsMessage(roots)}`);
   }
   const root = lexical
-    ?? roots.filter(candidate => contains(candidate.canonicalPath, canonicalPath))
+    ?? roots.filter(candidate => aliasContainment(candidate.canonicalPath, canonicalPath).contained)
       .sort((a, b) => b.canonicalPath.length - a.canonicalPath.length)[0];
   if (!root) {
     throw new Error(`${kind} resolves outside configured docs roots: ${lexicalPath} -> ${canonicalPath}\nConfigured docs roots: ${rootsMessage(roots)}`);
@@ -112,7 +133,7 @@ export function authorizeManagedSource(input, config, { kind = 'Managed mutation
   // /private/var back through the owning root.
   const managedPath = lexical
     ? lexicalPath
-    : path.join(root.lexicalPath, path.relative(root.canonicalPath, canonicalPath));
+    : path.join(root.lexicalPath, aliasContainment(root.canonicalPath, canonicalPath).relative);
   return { path: managedPath, canonicalPath, root };
 }
 
@@ -130,7 +151,7 @@ export function authorizeManagedDestination(input, config, { root: requiredRoot 
   }
 
   const ancestor = nearestExistingAncestor(lexicalPath, roots, kind);
-  if (!contains(root.canonicalPath, ancestor)) {
+  if (!aliasContainment(root.canonicalPath, ancestor).contained) {
     throw new Error(`${kind} escapes through an existing symlinked parent: ${lexicalPath} -> ${ancestor}\nOwning docs root: ${root.lexicalPath}\nConfigured docs roots: ${rootsMessage(roots)}`);
   }
   return { path: lexicalPath, canonicalPath: existsSync(lexicalPath) ? realpathSync(lexicalPath) : null, root };

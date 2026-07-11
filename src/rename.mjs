@@ -7,6 +7,7 @@ import { gitMv } from './git.mjs';
 import { green, dim } from './color.mjs';
 import { isInteractive, promptText } from './prompt.mjs';
 import { authorizeManagedDestination, authorizeManagedSource, authorizeManagedSweep } from './managed-path.mjs';
+import { readPlanOwnership } from './pickup.mjs';
 
 export async function runRename(argv, config, opts = {}) {
   const { dryRun } = opts;
@@ -58,6 +59,10 @@ export async function runRename(argv, config, opts = {}) {
   const newRepoPath = toRepoPath(newPath, config.repoRoot);
   const oldBasename = path.basename(oldPath);
   const newBasename = path.basename(newPath);
+  const ownership = readPlanOwnership(oldRepoPath, config);
+  if (ownership?.corrupt || ownership?.state === 'owned') {
+    die(`Cannot rename an owned plan; release it first with \`dotmd set active ${oldRepoPath}\`.`);
+  }
 
   // Scan for references in other docs
   const allFiles = collectDocFiles(config);

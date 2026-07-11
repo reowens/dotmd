@@ -11,9 +11,27 @@ import { isInteractive, promptChoice } from './prompt.mjs';
 import { buildCard, renderCard } from './pickup-card.mjs';
 import { walkSections, findSection } from './section.mjs';
 import { authorizeManagedDestination, authorizeManagedSource, authorizeManagedSweep } from './managed-path.mjs';
-import { withPathLocks, snapshotFile, replaceSnapshot, moveFileAtomic, mutateFile } from './atomic-mutation.mjs';
+import { withPathLocks, snapshotFile, replaceSnapshot, moveFileAtomic, mutateFile, mutateFileSet } from './atomic-mutation.mjs';
+import {
+  assertPlanMutationAuthorized,
+  assertHookDeliveryTakeoverSafe,
+  abandonClaimHookDelivery,
+  authoritativeSessionId,
+  availableSessionId,
+  beginClaimHookDelivery,
+  classifyPlanPickup,
+  commitPlanClaim,
+  finishClaimHookDelivery,
+  listOwnedPlans,
+  pickupFactsForDoc,
+  prepareOwnershipRelease,
+  readPlanOwnership,
+  skipClaimHookDelivery,
+  updateOwnershipOperation,
+  validatedClaimOperation,
+} from './pickup.mjs';
 
-function renderLifecycleMutation(raw, updates, historyEntry, { createSection = false, bodyTransform = null } = {}) {
+export function renderLifecycleMutation(raw, updates, historyEntry, { createSection = false, bodyTransform = null } = {}) {
   raw = normalizeEol(raw);
   if (!raw.startsWith('---\n')) throw new Error('Document has no frontmatter block. Retrofit it with `dotmd bulk-tag` first.');
   const endMarker = raw.indexOf('\n---\n', 4);
@@ -60,22 +78,36 @@ function commitLifecycleMutation(filePath, targetPath, config, updates, historyF
     let result;
     const tracked = isTracked(filePath, config.repoRoot);
     const gitIndex = tracked ? captureGitIndexPaths([filePath, targetPath], config.repoRoot) : null;
-    const allFiles = collectDocFiles(config).filter(candidate => candidate !== filePath && candidate !== targetPath);
+    const companionPaths = new Set((options.additionalUpdates ?? []).map(item => path.resolve(item.path)));
+    const allFiles = collectDocFiles(config).filter(candidate => candidate !== filePath && candidate !== targetPath && !companionPaths.has(path.resolve(candidate)));
     authorizeManagedSweep(allFiles, config, { kind: 'Reference rewrite source' });
     const moveResult = moveFileAtomic(filePath, targetPath, sourceContent => {
       result = render(sourceContent);
       return result.content;
     }, {
       repoRoot: config.repoRoot,
-      updates: allFiles.map(docFile => ({
+      updates: [...allFiles.map(docFile => ({
         path: docFile,
         render: raw => renderInboundRefs(raw, docFile, filePath, targetPath, config),
-      })),
+      })), ...(options.additionalUpdates ?? []).map(item => ({
+        ...item,
+        content: item.content === undefined ? undefined : renderInboundRefs(item.content, item.path, filePath, targetPath, config),
+      }))],
+      creations: options.creations ?? [],
       finalize: tracked ? () => stageMovePaths(filePath, targetPath, config.repoRoot) : null,
       rollbackFinalize: tracked ? () => restoreGitIndexPaths(gitIndex, config.repoRoot) : null,
       testHooks: options.testHooks,
     });
     return { ...result, sourceContent: moveResult.source.content, updatedPaths: moveResult.updatedPaths };
+  }
+  if ((options.additionalUpdates?.length ?? 0) > 0 || (options.creations?.length ?? 0) > 0) {
+    const sourceContent = readFileSync(filePath, 'utf8');
+    const result = render(sourceContent);
+    mutateFileSet({
+      updates: [{ path: filePath, expectedContent: sourceContent, content: result.content }, ...(options.additionalUpdates ?? [])],
+      creations: options.creations ?? [],
+    }, { repoRoot: config.repoRoot, testHooks: options.testHooks });
+    return { ...result, sourceContent, updatedPaths: [] };
   }
   return withPathLocks([filePath], { repoRoot: config.repoRoot }, () => {
     const sourceSnapshot = snapshotFile(filePath);
@@ -135,17 +167,92 @@ function archiveBaseFor(filePath, fileRoot, docType, config) {
 // change that affects what would render leaves the index stale. Wrapped
 // in try/catch — a regen failure shouldn't undo the successful mutation,
 // only warn with the recovery command.
-export function regenIndex(config) {
+export function regenIndex(config, options = {}) {
   if (!config.indexPath) return;
   try {
     // Fast path: skip validation/git-staleness/ref-checking — the rendered
     // index file only consumes status/title/snapshot/etc. Validation runs on
     // explicit `dotmd check` / `dotmd index`. This keeps lifecycle commands
     // snappy on repos with huge git history or heavy `validate` hooks.
-    writeRenderedIndex(() => buildIndex(config, { fast: true }), config);
+    options.testHooks?.beforeClaimIndex?.();
+    writeRenderedIndex(() => buildIndex(config, { fast: true }), config, { testHooks: options.testHooks });
   } catch (err) {
+    if (options.throwOnError) throw err;
     warn(`Could not regenerate index (run \`dotmd index\`): ${err.message}`);
   }
+}
+
+function reconcileClaimOperation(repoPath, config, opts = {}) {
+  let current = validatedClaimOperation(repoPath, config);
+  if (!current) return;
+  const binding = current.binding;
+  if (current.operation.index === 'pending') {
+    regenIndex(config, { throwOnError: true, testHooks: opts.testHooks });
+    updateOwnershipOperation(repoPath, config, binding, op => { op.index = 'done'; });
+    current = validatedClaimOperation(repoPath, config, binding);
+    if (!current) throw new Error(`Claim completion was superseded for ${repoPath}.`);
+  }
+  if (['pending', 'delivering'].includes(current.operation.hook)) {
+    if (current.operation.hook === 'pending' && !config.hooks.onPickup) {
+      updateOwnershipOperation(repoPath, config, binding, op => {
+        op.hook = 'skipped';
+        delete op.hookDeliveryToken;
+        delete op.hookDeliveryStartedAt;
+        delete op.hookDeliveryOwner;
+      });
+      return;
+    }
+    // Durable outbox contract: retries reuse operationId until the hook returns.
+    // Hooks that perform external side effects must deduplicate by operationId.
+    // No local protocol can distinguish a crash after the external side effect
+    // from a crash before the completion marker is persisted.
+    opts.testHooks?.beforeClaimHookInvoke?.({ repoPath, binding });
+    const lease = beginClaimHookDelivery(repoPath, config, binding, {
+      now: opts.hookLeaseNow,
+      leaseMs: opts.hookLeaseMs,
+      ownerLiveness: opts.hookOwnerLiveness,
+    });
+    if (!lease) return;
+    if (lease.busy) throw new Error(`Claim hook delivery is already in progress for ${repoPath}.`);
+    if (!config.hooks.onPickup) {
+      skipClaimHookDelivery(repoPath, config, binding, lease.token);
+      return;
+    }
+    try {
+      const operation = lease.operation;
+      const event = { path: repoPath, oldStatus: operation.oldStatus, newStatus: 'in-session', operationId: operation.id };
+      config.hooks.onPickup(event);
+    } catch (err) {
+      abandonClaimHookDelivery(repoPath, config, binding, lease.token);
+      throw err;
+    }
+    finishClaimHookDelivery(repoPath, config, binding, lease.token);
+  }
+}
+
+export function completePlanClaim(repoPath, config, opts = {}) {
+  const current = validatedClaimOperation(repoPath, config);
+  if (opts.noIndex && current) updateOwnershipOperation(repoPath, config, current.binding, op => { op.index = 'skipped'; });
+  return reconcileClaimOperation(repoPath, config, opts);
+}
+
+export function ensurePlanCompletionBeforeRelease(repoPath, config, opts = {}) {
+  const before = validatedClaimOperation(repoPath, config);
+  if (!before) return;
+  reconcileClaimOperation(repoPath, config, opts);
+  const after = validatedClaimOperation(repoPath, config, before.binding);
+  if (after && (after.operation.index === 'pending' || ['pending', 'delivering'].includes(after.operation.hook))) {
+    throw new Error(`Cannot release ${repoPath}; claim completion is still pending.`);
+  }
+}
+
+export function planHasPendingCompletion(repoPath, config) {
+  const current = validatedClaimOperation(repoPath, config);
+  return Boolean(current && (current.operation.index === 'pending' || ['pending', 'delivering'].includes(current.operation.hook)));
+}
+
+export function pickupCandidates(index, config, sessionId) {
+  return index.docs.filter(doc => pickupFactsForDoc(doc, config, { sessionId }).pickupable);
 }
 
 // Pick an archive destination that won't clobber an existing record. If
@@ -269,9 +376,24 @@ export async function runStatus(argv, config, opts = {}) {
     die(`Invalid status: ${newStatus}\nValid: ${[...effectiveValid].join(', ')}${hint}`);
   }
 
+  if (!opts.suppressDeprecation) {
+    const delegated = [newStatus, input];
+    if (note) delegated.push('--note', note);
+    if (noIndex) delegated.push('--no-index');
+    if (showFiles) delegated.push('--show-files');
+    if (argv.includes('--force')) delegated.push('--force');
+    return runSet(delegated, config, { ...opts, suppressDeprecation: true });
+  }
+
   const oldStatus = asString(parsedFm.status);
 
   if (oldStatus === newStatus) {
+    if (!dryRun && (opts.additionalUpdates?.length || opts.creations?.length)) {
+      mutateFileSet({ updates: opts.additionalUpdates ?? [], creations: opts.creations ?? [] }, {
+        repoRoot: config.repoRoot,
+        testHooks: opts.testHooks,
+      });
+    }
     process.stdout.write(`${toRepoPath(filePath, config.repoRoot)}: already ${newStatus}, no changes made.\n`);
     return;
   }
@@ -354,7 +476,12 @@ export async function runStatus(argv, config, opts = {}) {
   const mutationResult = commitLifecycleMutation(filePath, targetPath, config, { status: newStatus, updated: today }, currentOld => {
     const currentTransition = `Status: ${currentOld} → ${newStatus}`;
     return note ? `${currentTransition} — ${note}` : `${currentTransition}.`;
-  }, { createSection: Boolean(note) });
+  }, {
+    createSection: Boolean(note),
+    additionalUpdates: opts.additionalUpdates,
+    creations: opts.creations,
+    testHooks: opts.testHooks,
+  });
 
   // Any of the four moves above shifts the file's directory, which breaks
   // relative refs in both directions — links FROM the moved file and inbound
@@ -395,25 +522,24 @@ export async function runStatus(argv, config, opts = {}) {
   }); } catch (err) { warn(`Hook 'onStatusChange' threw: ${err.message}`); }
 }
 
-// Open a plan for work: flip its frontmatter status to `in-session` and print
-// its card (body + related + next steps). No lease, no claiming — just a
-// status write. Backs `dotmd use <plan>` and `dotmd runlist next`.
+// Atomically claim a plan for this session, then reconcile its generated index
+// and pickup hook before printing the card. Backs direct use and next selectors.
 export async function startPlan(argv, config, opts = {}) {
   const { dryRun } = opts;
   const json = argv.includes('--json');
   const fullBody = argv.includes('--full');
   const noIndex = argv.includes('--no-index') || opts.noIndex;
   const showFiles = argv.includes('--show-files') || opts.showFiles;
+  const force = argv.includes('--force') || opts.force;
   let input = argv.find(a => !a.startsWith('-'));
 
   // Interactive: pick from active/planned plans
   if (!input) {
     if (!isInteractive()) die('Usage: dotmd use <plan>');
     const index = buildIndex(config);
-    const candidates = index.docs.filter(d =>
-      d.type === 'plan' && (d.status === 'active' || d.status === 'planned')
-    );
-    if (candidates.length === 0) die('No active/planned plans.');
+    const sessionId = authoritativeSessionId();
+    const candidates = pickupCandidates(index, config, sessionId);
+    if (candidates.length === 0) die('No pickup-able plans.');
     const labelFor = (d) => `${d.title} (${d.status}) — ${d.path}`;
     const choice = await promptChoice('Pick a plan:', candidates.map(labelFor));
     if (!choice) die('No plan selected.');
@@ -426,38 +552,83 @@ export async function startPlan(argv, config, opts = {}) {
   filePath = authorizeManagedSource(filePath, config, { kind: 'Plan start source' }).path;
 
   const raw = readFileSync(filePath, 'utf8');
-  const { frontmatter: fmRaw, body } = extractFrontmatter(raw);
-  const parsedFm = parseSimpleFrontmatter(fmRaw);
+  let fmRaw, body, parsedFm;
+  try {
+    ({ frontmatter: fmRaw, body } = extractFrontmatter(raw));
+    if (!fmRaw) throw new Error('missing frontmatter');
+    parsedFm = parseSimpleFrontmatter(fmRaw);
+  } catch {
+    die(`Malformed plan document: ${toRepoPath(filePath, config.repoRoot)}`);
+  }
   const docType = asString(parsedFm.type) ?? null;
   const oldStatus = asString(parsedFm.status);
   const title = asString(parsedFm.title) ?? path.basename(filePath, '.md');
   const repoPath = toRepoPath(filePath, config.repoRoot);
 
-  if (docType && docType !== 'plan') warn(`${repoPath} has type '${docType}', not 'plan'.`);
-
-  if (oldStatus === 'blocked') {
-    const blockers = parsedFm.blockers ? (Array.isArray(parsedFm.blockers) ? parsedFm.blockers.join(', ') : String(parsedFm.blockers)) : 'unknown';
-    die(`Plan is blocked: ${blockers}\n  ${repoPath}`);
+  const sessionId = dryRun ? (availableSessionId() ?? '__dry-run-no-session__') : authoritativeSessionId();
+  const ownership = readPlanOwnership(repoPath, config);
+  if (force) assertHookDeliveryTakeoverSafe(ownership, {
+    now: opts.hookLeaseNow,
+    leaseMs: opts.hookLeaseMs,
+    ownerLiveness: opts.hookOwnerLiveness,
+  });
+  let disposition = classifyPlanPickup({
+    type: docType,
+    status: oldStatus,
+    validStatuses: config.typeStatuses?.get('plan') ?? config.validStatuses,
+    startableStatuses: config.lifecycle.startableStatuses,
+    terminalStatuses: config.lifecycle.terminalStatuses,
+    archiveStatuses: config.lifecycle.archiveStatuses,
+    physicallyArchived: isArchivedPath(repoPath, config),
+    ownership,
+    sessionId,
+    malformed: false,
+  });
+  if (force && ['busy', 'ownership-corrupt'].includes(disposition.kind)) {
+    disposition = classifyPlanPickup({
+      type: docType, status: oldStatus,
+      validStatuses: config.typeStatuses?.get('plan') ?? config.validStatuses,
+      startableStatuses: config.lifecycle.startableStatuses,
+      terminalStatuses: config.lifecycle.terminalStatuses,
+      archiveStatuses: config.lifecycle.archiveStatuses,
+      physicallyArchived: isArchivedPath(repoPath, config), ownership: null, sessionId, malformed: false,
+    });
   }
-
+  if (!disposition.pickupable) {
+    const detail = disposition.kind === 'busy' ? ` (owned by ${disposition.owner})` : '';
+    die(`Plan cannot be picked up: ${disposition.kind}${detail}\n  ${repoPath}`);
+  }
   const today = nowIso();
   if (dryRun) {
-    if (oldStatus === 'in-session') {
+    if (disposition.kind === 'resume') {
       process.stderr.write(`${dim('[dry-run]')} Already in-session: ${repoPath}\n`);
+    } else if (disposition.kind === 'adopt') {
+      process.stderr.write(`${dim('[dry-run]')} Would adopt unowned in-session plan: ${repoPath}\n`);
     } else {
       process.stderr.write(`${dim('[dry-run]')} Would update: status: ${oldStatus} → in-session, updated: ${today}\n`);
     }
-  } else if (oldStatus !== 'in-session') {
-    commitLifecycleMutation(filePath, null, config, { status: 'in-session', updated: today },
-      currentOld => `Started (${currentOld} → in-session).`);
-    if (noIndex) {
-      process.stderr.write(dim('(index not regenerated — run `dotmd index` to refresh)\n'));
-    } else {
-      regenIndex(config);
-    }
+  } else if (disposition.kind !== 'resume') {
+    const history = opts.note
+      ? `Started (${oldStatus} → in-session) — ${opts.note}`
+      : `Started (${oldStatus} → in-session).`;
+    const rendered = disposition.kind === 'start'
+      ? renderLifecycleMutation(raw, { status: 'in-session', updated: today }, history, { createSection: true })
+      : null;
+    commitPlanClaim({ filePath, repoPath, sourceContent: raw, renderedContent: rendered,
+      ownership, sessionId, now: today, config, testHooks: opts.testHooks });
   }
 
-  if (json) {
+  if (!dryRun) {
+    if (noIndex) {
+      const current = validatedClaimOperation(repoPath, config);
+      if (current) updateOwnershipOperation(repoPath, config, current.binding, op => { op.index = 'skipped'; });
+    }
+    reconcileClaimOperation(repoPath, config, { ...opts, oldStatus });
+  }
+
+  if (opts.quiet) {
+    // Prompt consume owns the user-facing output; the transition is identical.
+  } else if (json) {
     const card = buildCard(filePath, raw, config);
     process.stdout.write(JSON.stringify({
       path: repoPath, oldStatus, newStatus: 'in-session', title,
@@ -477,23 +648,22 @@ export async function startPlan(argv, config, opts = {}) {
     }
   }
 
-  if (showFiles && oldStatus !== 'in-session') {
+  if (showFiles && disposition.kind === 'start') {
     const touched = [filePath];
     if (config.indexPath && !noIndex) touched.push(config.indexPath);
     emitFilesFooter(touched, config);
   }
 
-  if (!dryRun && oldStatus !== 'in-session') {
-    try { config.hooks.onPickup?.({ path: repoPath, oldStatus, newStatus: 'in-session' }); } catch (err) { warn(`Hook 'onPickup' threw: ${err.message}`); }
-  }
+  return { path: repoPath, oldStatus, disposition: disposition.kind };
 }
 
 export function runArchive(argv, config, opts = {}) {
   const { dryRun, out = process.stdout } = opts;
+  const force = argv.includes('--force') || opts.force;
   const noIndex = argv.includes('--no-index') || opts.noIndex;
   const showFiles = argv.includes('--show-files') || opts.showFiles;
   const closeoutTemplate = argv.includes('--closeout-template');
-  argv = argv.filter(a => a !== '--no-index' && a !== '--show-files' && a !== '--closeout-template');
+  argv = argv.filter(a => a !== '--no-index' && a !== '--show-files' && a !== '--closeout-template' && a !== '--force');
   let note = opts.note ?? null;
   const noteIdx = argv.indexOf('--note');
   if (noteIdx !== -1) {
@@ -521,6 +691,19 @@ export function runArchive(argv, config, opts = {}) {
   const { frontmatter, body } = extractFrontmatter(raw);
   const parsed = parseSimpleFrontmatter(frontmatter);
   const oldStatus = asString(parsed.status) ?? 'unknown';
+  const archiveRepoPath = toRepoPath(filePath, config.repoRoot);
+  const archiveOwnership = asString(parsed.type) === 'plan' ? readPlanOwnership(archiveRepoPath, config) : null;
+  const releasingOwnership = asString(parsed.type) === 'plan'
+    && (oldStatus === 'in-session' || archiveOwnership?.state === 'owned' || archiveOwnership?.corrupt);
+  const releaseSessionId = releasingOwnership ? authoritativeSessionId() : null;
+  if (releasingOwnership) assertPlanMutationAuthorized(archiveRepoPath, config, { sessionId: releaseSessionId, force });
+  if (releasingOwnership && !dryRun) ensurePlanCompletionBeforeRelease(archiveRepoPath, config, { testHooks: opts.testHooks });
+  if (releasingOwnership && dryRun && planHasPendingCompletion(archiveRepoPath, config)) {
+    out.write(`${dim('[dry-run]')} Pending claim completion would block this release.\n`);
+  }
+  const releaseUpdate = releasingOwnership
+    ? prepareOwnershipRelease(archiveRepoPath, config, { sessionId: releaseSessionId, force })
+    : null;
 
   // Preserve a configured custom archive status (e.g. `done` with archive:true)
   // when one is threaded through from `dotmd set <archive-status>`. Fall back to
@@ -550,8 +733,13 @@ export function runArchive(argv, config, opts = {}) {
     }
     commitLifecycleMutation(filePath, null, config, { status: targetStatus, updated: today },
       currentOld => `Archived (frontmatter healed in place from \`${currentOld}\`)${note ? ` — ${note}` : '.'}`,
-      { createSection: Boolean(note) });
-    if (!noIndex) regenIndex(config);
+      {
+        createSection: Boolean(note),
+        additionalUpdates: [...(opts.additionalUpdates ?? []), ...(releaseUpdate ? [releaseUpdate] : [])],
+        creations: opts.creations,
+        testHooks: opts.testHooks,
+      });
+    if (!noIndex && !opts.deferIndex) regenIndex(config);
     out.write(`${green('✓ Healed')}: ${repoPathHeal} (${oldStatus} → ${targetStatus}; file already under \`${config.archiveDir}/\`)\n`);
     const touched = [repoPathHeal];
     if (config.indexPath && !noIndex) touched.push(config.indexPath);
@@ -611,6 +799,8 @@ export function runArchive(argv, config, opts = {}) {
     () => note ? `Archived — ${note}` : 'Archived.', {
       createSection: Boolean(note),
       testHooks: opts.testHooks,
+      additionalUpdates: [...(opts.additionalUpdates ?? []), ...(releaseUpdate ? [releaseUpdate] : [])],
+      creations: opts.creations,
       bodyTransform: closeoutTemplate ? currentBody => {
         committedCloseoutAction = planCloseoutInjection(currentBody);
         return committedCloseoutAction.action === 'inject' ? committedCloseoutAction.newBody : currentBody;
@@ -621,7 +811,7 @@ export function runArchive(argv, config, opts = {}) {
   const refTouchedPaths = mutationResult.updatedPaths;
   const updatedRefCount = refTouchedPaths.length;
 
-  if (!noIndex) regenIndex(config);
+  if (!noIndex && !opts.deferIndex) regenIndex(config);
 
   out.write(`${green('Archived')}: ${oldRepoPath} → ${newRepoPath}\n`);
   if (committedCloseoutAction?.action === 'inject') {
@@ -631,7 +821,7 @@ export function runArchive(argv, config, opts = {}) {
   }
   if (selfRefsFixed) out.write('Updated references in archived file.\n');
   if (updatedRefCount > 0) out.write(`Updated references in ${updatedRefCount} file(s).\n`);
-  if (config.indexPath && !noIndex) out.write('Index regenerated.\n');
+  if (config.indexPath && !noIndex && !opts.deferIndex) out.write('Index regenerated.\n');
   if (config.indexPath && noIndex) out.write(dim('(index not regenerated — run `dotmd index` to refresh)\n'));
 
   const touched = [oldRepoPath, newRepoPath, ...refTouchedPaths];
@@ -654,18 +844,17 @@ export function runArchive(argv, config, opts = {}) {
 // signature — `dotmd set <status> [<path>]` — and dispatches to the right
 // plumbing based on the *target* status:
 //   - target in archiveStatuses (and file not already archived) → runArchive
-//     (gets us ref-fixing + auto lease release + closeout-template offer)
+//     (gets us ref-fixing + atomic ownership release + closeout-template offer)
 //   - source = in-session, target != in-session                → runStatus +
-//     auto-release of the held lease (so users don't have to chain `release`)
+//     atomic release of the ownership record
 //   - everything else (incl. unarchive, plain transitions)     → runStatus
 //
-// Path is inferred from the calling session's held lease when omitted. With
-// zero leases or >1 leases, we refuse and ask for explicit `<path>` instead
+// Path is inferred from the calling session's valid ownership record when omitted. With
+// zero records, ambiguity, or corruption, we refuse and ask for explicit `<path>` instead
 // of guessing.
 //
-// `dotmd set in-session <path>` is refused — acquiring a lease is asymmetric
-// enough to deserve its own verb (`dotmd pickup`), and silently routing here
-// would skip the lease-acquisition path entirely.
+// `dotmd set in-session <path>` routes through the exact same claim transition
+// as `dotmd use`, including history, ownership, index, and hook completion.
 
 // Did THIS session already hand off via `dotmd baton`? The journal records the
 // top-level argv of every invocation; a successful `baton …` means a resume
@@ -688,7 +877,8 @@ export async function runSet(argv, config, opts = {}) {
   const { dryRun } = opts;
   const noIndex = argv.includes('--no-index');
   const showFiles = argv.includes('--show-files');
-  argv = argv.filter(a => a !== '--no-index' && a !== '--show-files');
+  const force = argv.includes('--force') || opts.force;
+  argv = argv.filter(a => a !== '--no-index' && a !== '--show-files' && a !== '--force');
   let note = opts.note ?? null;
   const noteIdx = argv.indexOf('--note');
   if (noteIdx !== -1) {
@@ -698,13 +888,43 @@ export async function runSet(argv, config, opts = {}) {
   }
 
   const newStatus = argv[0];
-  const input = argv[1];
+  let input = argv[1];
 
-  if (!newStatus) die('Usage: dotmd set <status> <path>');
-  if (!input) die('Usage: dotmd set <status> <path>');
+  if (!newStatus) die('Usage: dotmd set <status> [<path>]');
+  let sessionId = null;
+  if (!input) {
+    sessionId = authoritativeSessionId();
+    const owned = listOwnedPlans(config, sessionId);
+    if (owned.length !== 1 || owned.diagnostics?.length) {
+      const diagnostics = owned.diagnostics?.length ? `\nIgnored ownership records:\n${owned.diagnostics.map(d => `  ${d}`).join('\n')}` : '';
+      die(`No-target set requires exactly one valid in-session plan owned by this session; found ${owned.length}. Pass an explicit path.${diagnostics}`);
+    }
+    input = owned[0].plan;
+  }
 
   let filePath = resolveDocArg(input, config);
   filePath = authorizeManagedSource(filePath, config, { kind: 'Set source' }).path;
+  const repoPath = toRepoPath(filePath, config.repoRoot);
+
+  if (newStatus === 'in-session') {
+    const args = [filePath];
+    if (noIndex) args.push('--no-index');
+    if (showFiles) args.push('--show-files');
+    if (force) args.push('--force');
+    return startPlan(args, config, { ...opts, force, note });
+  }
+
+  let oldFm = null;
+  try { oldFm = parseSimpleFrontmatter(extractFrontmatter(readFileSync(filePath, 'utf8')).frontmatter); } catch { /* runStatus reports malformed docs */ }
+  const oldOwnership = asString(oldFm?.type) === 'plan' ? readPlanOwnership(repoPath, config) : null;
+  const releasing = asString(oldFm?.type) === 'plan'
+    && (asString(oldFm?.status) === 'in-session' || oldOwnership?.state === 'owned' || oldOwnership?.corrupt);
+  if (releasing) {
+    sessionId ??= authoritativeSessionId();
+    assertPlanMutationAuthorized(repoPath, config, { sessionId, force });
+    if (!dryRun) ensurePlanCompletionBeforeRelease(repoPath, config, { testHooks: opts.testHooks });
+    else if (planHasPendingCompletion(repoPath, config)) process.stderr.write(`${dim('[dry-run]')} Pending claim completion would block this release.\n`);
+  }
 
   const inArchive = isArchivedPath(toRepoPath(filePath, config.repoRoot), config);
 
@@ -715,7 +935,11 @@ export async function runSet(argv, config, opts = {}) {
     // Preserve the exact target status — a config may name its archive status
     // `done` (with archive:true) rather than `archived`. Without this, runArchive
     // would silently rewrite it to `archived`.
-    return runArchive(archiveArgs, config, { dryRun, note, archiveStatus: newStatus });
+    return runArchive(archiveArgs, config, {
+      dryRun, note, archiveStatus: newStatus, force, testHooks: opts.testHooks,
+      additionalUpdates: opts.additionalUpdates,
+      creations: opts.creations,
+    });
   }
 
   // Two advisory reminders, both computed from one pre-transition frontmatter
@@ -759,7 +983,17 @@ export async function runSet(argv, config, opts = {}) {
   const statusArgs = [filePath, newStatus];
   if (noIndex) statusArgs.push('--no-index');
   if (showFiles) statusArgs.push('--show-files');
-  await runStatus(statusArgs, config, { dryRun, suppressDeprecation: true, note });
+  const releaseUpdate = releasing
+    ? prepareOwnershipRelease(repoPath, config, { sessionId, force })
+    : null;
+  await runStatus(statusArgs, config, {
+    dryRun,
+    suppressDeprecation: true,
+    note,
+    additionalUpdates: releaseUpdate ? [releaseUpdate] : [],
+    creations: opts.creations,
+    testHooks: opts.testHooks,
+  });
 
   if (!dryRun) {
     if (partialReminder) {

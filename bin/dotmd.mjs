@@ -49,7 +49,7 @@ const FLAG_SPECS = {
   'agent-context': { flags: new Set(['--json']), values: new Set() },
   hud: { flags: new Set(['--json', '--subagent']), values: new Set() },
   // '-' is the stdin marker (a positional, not a flag) — listed so validation lets it through.
-  baton: { flags: new Set(['--status', '--note', '--body', '--message', '--dry-run', '-n', '-']), values: new Set(['--status', '--note', '--body', '--message']) },
+  baton: { flags: new Set(['--status', '--note', '--body', '--message', '--force', '--dry-run', '-n', '-']), values: new Set(['--status', '--note', '--body', '--message']) },
   guard: { flags: new Set(), values: new Set() },
   misuse: { flags: new Set(['--json', '--tail', '--by-rule', '--repo']), values: new Set(['--tail', '--repo']) },
   update: { flags: new Set(['--check', '--cli-only', '--plugin-only']), values: new Set() },
@@ -488,16 +488,22 @@ Defaults to patch. Pass \`minor\` or \`major\` to bump those instead.
 Network failures after the version tag exists are resumed with
 \`npm run release:resume\`. Never push tags or publish manually.`,
 
-  set: `dotmd set <status> <file-or-slug> — change a document's status
+  set: `dotmd set <status> [<file-or-slug>] — change a document's status
 
-Writes the new status into the file's frontmatter. Nothing else — no plan
-checkout, no session locks.
+Writes the new status into the file's frontmatter. In-session plans carry a
+local, gitignored ownership record under .dotmd/ so one session cannot release
+another session's work.
   - target is an archive status → archive the file (move + ref update)
   - everything else             → plain frontmatter status bump
 
 <file-or-slug> resolves like \`dotmd use\`/\`archive\`: exact path first, then
 a unique bare slug / basename across the doc roots (\`set paused auth-revamp\`).
 Ambiguous slugs error with the candidate list instead of guessing.
+When the path is omitted, exactly one plan must be owned by this session.
+Claude Code and OpenCode session IDs are recognized automatically. Other hosts
+must set DOTMD_SESSION_ID; anonymous ownership mutations fail closed.
+Pickup hooks use at-least-once delivery with a stable operationId; hook side
+effects must deduplicate that ID.
 
 Options:
   --note "<text>"        Append the reason to \`## Version History\` in the
@@ -505,12 +511,14 @@ Options:
                          the status-change + worklog-edit round-trip.
   --no-index             Skip index regen (see \`dotmd archive --help\`).
   --show-files           Append \`files: …\` footer.
+  --force                Recover another session's plan (explicit path required).
   --dry-run, -n          Preview without writing.
 
 Examples:
   dotmd set in-session docs/plans/x  # mark a plan in-session
   dotmd set partial docs/plans/x --note "tail tracked in y.md"
   dotmd set archived docs/plans/x    # archive a specific plan
+  dotmd set active                   # release this session's sole owned plan
 
 To open a plan (mark in-session AND print its body), use \`dotmd use <file>\`.`,
 
@@ -579,7 +587,8 @@ Options:
   --show-files           Append a final \`files: a b c …\` line to stderr
                          listing every doc/index path the command touched
                          (deduped, sorted, repo-relative). Lets agents do
-                         \`git add\` with the exact set instead of guessing.
+                          \`git add\` with the exact set instead of guessing.
+  --force                Recover another session's plan (explicit path required).
   --closeout-template    Inject a \`## Closeout\` skeleton into the plan body
                          before archiving — bullets for outcomes, key
                          commits, deferrals. No-op if a \`## Closeout\`
@@ -1075,7 +1084,8 @@ Examples:
 The "save a resume prompt" verb. Works mid-anything:
 
 Plan mode (a plan is in-session, or you pass one):
-  1. Saves a resume prompt named resume-<plan-slug> (collision-safe: -2, -3, …),
+  The following publish in one atomic cooperating transaction:
+  1. A resume prompt named resume-<plan-slug> (collision-safe: -2, -3, …),
      stamped with a plan: link so consuming it re-claims the plan (see \`dotmd
      use\`). The prompt is session-local — the next session's hud surfaces it;
      never paste resume text into chat.
@@ -1083,8 +1093,10 @@ Plan mode (a plan is in-session, or you pass one):
      (--status to override, --note to record why in ## Version History).
   3. Prints the exact \`git commit\` for the plan's frontmatter change — the
      prompt stays OUT of the pathspec (it's session-local, often gitignored).
-  Which plan? Pass it explicitly, or baton resolves the one THIS session marked
-  in-session (via the journal), falling back to the only in-session plan.
+  Which plan? Pass it explicitly, or baton resolves exactly one plan owned by
+  this authoritative session. Journal entries and global in-session counts never
+  grant ownership. A live pickup-hook delivery lease blocks release and force
+  takeover; hooks are at-least-once and deduplicate the stable operationId.
 
 Slug mode (no plan involved — "save a resume prompt for this"):
   dotmd baton <slug> @/tmp/draft.md   →  saves resume-<slug>, touches NOTHING
@@ -1098,6 +1110,7 @@ Options:
   --status <s>           Target status for the plan (default: active; plan mode only)
   --note "why"           Append the reason to ## Version History (plan mode only)
   --message / --body     Inline body (one-liners; prefer @path or stdin)
+  --force                Recover another session's plan (explicit path required)
   --dry-run, -n          Preview without writing
 
 Examples:
@@ -1621,7 +1634,7 @@ async function main() {
   if (command === 'misuse') { const { runMisuse } = await import('../src/misuse-read.mjs'); runMisuse(restArgs, config); return; }
   if (command === 'journal') { const { runJournal } = await import('../src/journal-read.mjs'); runJournal(restArgs, config); return; }
   if (command === 'pickup' || command === 'unpickup' || command === 'release' || command === 'finish') {
-    die(`\`dotmd ${command}\` was removed — dotmd no longer checks plans in/out. Status is just frontmatter:\n  dotmd use <file>          # mark in-session + print the plan\n  dotmd set <status> <file> # change status\n  dotmd archive <file>      # close out`);
+    die(`\`dotmd ${command}\` was removed — use the ownership-aware lifecycle verbs:\n  dotmd use <file>          # atomically claim + mark in-session + print the plan\n  dotmd set <status> <file> # transition and release ownership when leaving in-session\n  dotmd archive <file>      # close out atomically`);
   }
   if (command === 'runlist') { const { runRunlist } = await import('../src/runlist.mjs'); await runRunlist(restArgs, config, { dryRun }); return; }
   if (command === 'handoff') { die('`dotmd handoff` was removed in 0.31.0. Use `dotmd prompts new <name>` to create a saved prompt instead. The .dotmd/handoffs/ sidecar mechanism no longer exists; see CHANGELOG.'); }

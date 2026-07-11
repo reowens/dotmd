@@ -15,7 +15,7 @@ function run(args, opts = {}) {
   return spawnSync('node', [BIN, 'runlist', ...args], {
     cwd: tmpDir,
     encoding: 'utf8',
-    env: { ...process.env, NO_COLOR: '1' },
+    env: { ...process.env, DOTMD_SESSION_ID: 'runlist-test-session', NO_COLOR: '1' },
     ...opts,
   });
 }
@@ -301,6 +301,27 @@ updated: 2026-05-26`);
     match(readyRaw, /status: in-session/);
     // The parked child is untouched.
     match(readFileSync(path.join(plans, 'parked.md'), 'utf8'), /status: awaiting/);
+  });
+
+  it('skips a child busy in another session and picks the next child', () => {
+    const plans = setupProject();
+    writeDoc(plans, 'hub.md', `type: plan
+status: active
+title: Hub
+updated: 2026-05-26
+runlist:
+  - busy.md
+  - free.md`);
+    writeDoc(plans, 'busy.md', 'type: plan\nstatus: active\ntitle: Busy\nupdated: 2026-05-26');
+    writeDoc(plans, 'free.md', 'type: plan\nstatus: active\ntitle: Free\nupdated: 2026-05-26');
+    const claim = spawnSync('node', [BIN, 'use', path.join(plans, 'busy.md')], {
+      cwd: tmpDir, encoding: 'utf8', env: { ...process.env, DOTMD_SESSION_ID: 'other-session', NO_COLOR: '1' },
+    });
+    strictEqual(claim.status, 0, claim.stderr);
+    const result = run(['next', 'hub.md']);
+    strictEqual(result.status, 0, result.stderr);
+    match(result.stderr, /Started.*free\.md/);
+    match(readFileSync(path.join(plans, 'busy.md'), 'utf8'), /status: in-session/);
   });
 
   it('stops with a runlist-aware error when every remaining child is parked', () => {

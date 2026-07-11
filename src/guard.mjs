@@ -280,7 +280,7 @@ function evalBash(command, config, inspectGitPaths, baseCwd) {
         detail: `${cmd0} ${promptTokens.join(' ')}`,
         reason:
           `${promptTokens.join(', ')} is a saved dotmd prompt. To start work from it, run \`dotmd use ${promptTokens[0]}\` — ` +
-          `it prints the body and archives the prompt in one atomic step (prevents double-consumption). ` +
+          `it commits archive/claim before at-most-once body output (prevents double-consumption). ` +
           `Just peeking or triaging (not consuming)? \`dotmd prompts show ${promptTokens[0]}\` reads it without archiving. Don't \`${cmd0}\` it directly.`,
       };
     }
@@ -304,7 +304,7 @@ function evalRead(filePath, config) {
     rule: 'read-prompt',
     detail: filePath,
     reason:
-      `${filePath} is a saved dotmd prompt. To start work from it, run \`dotmd use ${filePath}\` — it prints the body and archives the prompt atomically so it can't be double-consumed. ` +
+      `${filePath} is a saved dotmd prompt. To start work from it, run \`dotmd use ${filePath}\` — it commits archive/claim before at-most-once body output so it can't be double-consumed. ` +
       `Just peeking or triaging (not consuming)? \`dotmd prompts show ${filePath}\` reads it without archiving.`,
   };
 }

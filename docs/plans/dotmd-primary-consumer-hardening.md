@@ -2,7 +2,7 @@
 type: plan
 status: active
 created: 2026-07-10T05:53:02Z
-updated: 2026-07-10T20:45:00Z
+updated: 2026-07-11T22:32:54Z
 surfaces:
   - cli
   - plugin
@@ -27,7 +27,7 @@ runlist:
   - ../archived/dotmd-primary-consumer-hardening-11-notion-removal.md
   - ../archived/dotmd-primary-consumer-hardening-03-managed-path-containment.md
   - ../archived/dotmd-primary-consumer-hardening-04-atomic-mutation.md
-  - dotmd-primary-consumer-hardening-05-lifecycle-ownership.md
+  - ../archived/dotmd-primary-consumer-hardening-05-lifecycle-ownership.md
   - dotmd-primary-consumer-hardening-06-transactional-moves.md
   - dotmd-primary-consumer-hardening-12-path-identity-outputs.md
   - dotmd-primary-consumer-hardening-08-command-agent-contracts.md
@@ -97,7 +97,7 @@ Fixing findings independently would duplicate logic and preserve the underlying 
 4. [Notion Removal](../archived/dotmd-primary-consumer-hardening-11-notion-removal.md) ⬜
 5. [Managed Path Containment](../archived/dotmd-primary-consumer-hardening-03-managed-path-containment.md) ⬜
 6. [Atomic Mutation](../archived/dotmd-primary-consumer-hardening-04-atomic-mutation.md) ⬜
-7. [Lifecycle Ownership](dotmd-primary-consumer-hardening-05-lifecycle-ownership.md) ⬜
+7. [Lifecycle Ownership](../archived/dotmd-primary-consumer-hardening-05-lifecycle-ownership.md) ⬜
 8. [Transactional Moves](dotmd-primary-consumer-hardening-06-transactional-moves.md) ⬜
 9. [Path Identity Outputs](dotmd-primary-consumer-hardening-12-path-identity-outputs.md) ⬜
 10. [Command Schema Contracts](dotmd-primary-consumer-hardening-08-command-agent-contracts.md) ⬜
