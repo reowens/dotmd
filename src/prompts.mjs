@@ -2,10 +2,10 @@ import { readFileSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractFrontmatter, parseSimpleFrontmatter } from './frontmatter.mjs';
-import { asString, toRepoPath, die, warn, resolveDocPath, isArchivedPath, currentSessionId } from './util.mjs';
+import { asString, toRepoPath, die, warn, resolveDocPath, isArchivedPath, currentSessionId, nowIso } from './util.mjs';
 import { buildIndex, resolveDocArg } from './index.mjs';
 import { runQuery } from './query.mjs';
-import { runArchive, runStatus, updateFrontmatter } from './lifecycle.mjs';
+import { runArchive, runStatus, updateFrontmatterAtomic } from './lifecycle.mjs';
 import { appendJournalEntry } from './journal.mjs';
 import { runNew } from './new.mjs';
 import { green, dim } from './color.mjs';
@@ -281,12 +281,12 @@ export function consumePrompt(filePath, config, opts) {
   // hook crash, anything), the body must not have already gone to stdout —
   // otherwise `claude "$(dotmd prompts next)"` consumes the prompt without it
   // ever being archived, and the next session sees the same prompt as pending.
-  // Body is already in memory from extractFrontmatter, so the source file
-  // can move out from under us safely.
-  const archiveResult = runArchive([filePath], config, { noIndex, showFiles, out: process.stderr });
+  const archiveResult = runArchive([filePath], config, { noIndex, showFiles, out: process.stderr, testHooks: opts.testHooks });
+  const consumedBody = archiveResult?.consumedBody ?? body;
+  const consumedFrontmatter = archiveResult?.consumedFrontmatter ?? parsed;
 
-  process.stdout.write(body);
-  if (!body.endsWith('\n')) process.stdout.write('\n');
+  process.stdout.write(consumedBody);
+  if (!consumedBody.endsWith('\n')) process.stdout.write('\n');
 
   const consumedPath = archiveResult?.newRepoPath ?? repoPath;
   process.stderr.write(`${green('✓ Consumed')}: ${consumedPath}\n`);
@@ -295,7 +295,7 @@ export function consumePrompt(filePath, config, opts) {
   // Adopt that plan for THIS session so the next `dotmd baton` (with no arg)
   // hands it off — closing the cross-session ownership loop that otherwise dies
   // at the prompt boundary.
-  claimPromptPlan(asString(parsed.plan), config);
+  claimPromptPlan(asString(consumedFrontmatter.plan), config);
 }
 
 // Flip the resume prompt's linked plan to in-session for this session and
@@ -323,7 +323,7 @@ function claimPromptPlan(planRef, config) {
   if (!cur || cur === 'in-session' || cur === 'archived') return;
 
   const repoPath = toRepoPath(planPath, config.repoRoot);
-  try { updateFrontmatter(planPath, { status: 'in-session' }); }
+  try { updateFrontmatterAtomic(planPath, { status: 'in-session', updated: nowIso() }, config, { expected: { status: cur } }); }
   catch { return; }
   try {
     // `v` MUST be the real CLI version: the journal rotates when a new entry's

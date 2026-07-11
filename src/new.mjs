@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, fstatSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, fstatSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { toRepoPath, die, warn, nowIso, emitFilesFooter } from './util.mjs';
@@ -7,6 +7,7 @@ import { isInteractive, promptText } from './prompt.mjs';
 import { regenIndex } from './lifecycle.mjs';
 import { extractFrontmatter, parseSimpleFrontmatter, normalizeEol } from './frontmatter.mjs';
 import { authorizeManagedDestination } from './managed-path.mjs';
+import { createFileExclusive, mutateFileSet, MutationConflictError } from './atomic-mutation.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
@@ -844,20 +845,32 @@ export async function runNew(argv, config, opts = {}) {
   // Ensure parent dir exists (templates with `dir:` may target a new subdirectory)
   mkdirSync(path.dirname(filePath), { recursive: true });
 
-  writeFileSync(filePath, content, 'utf8');
-  process.stdout.write(`${green('Created')}: ${repoPath} ${dim(`(${typeName}${hubKind})`)}\n`);
-  if (rootHint) process.stdout.write(dim(rootHint));
-
-  // Scaffold runlist child stubs. An existing child file is never clobbered.
   const childPaths = [];
+  const creations = [{ path: filePath, content }];
   for (const c of runlistChildren) {
     const childPath = path.join(baseDir, c.file);
     if (existsSync(childPath)) {
       warn(`Runlist child already exists, left as-is: ${toRepoPath(childPath, config.repoRoot)}`);
       continue;
     }
-    writeFileSync(childPath, runlistChildContent(c.title, slug, docTitle, childStatus, today), 'utf8');
+    creations.push({ path: childPath, content: runlistChildContent(c.title, slug, docTitle, childStatus, today) });
     childPaths.push(childPath);
+  }
+  try {
+    if (runlistChildren.length > 0) mutateFileSet({ creations }, { repoRoot: config.repoRoot, testHooks: opts.testHooks });
+    else createFileExclusive(filePath, content, { repoRoot: config.repoRoot, testHooks: opts.testHooks });
+  } catch (err) {
+    if (err instanceof MutationConflictError) die(`Could not create runlist atomically because a destination already exists: ${err.message}`);
+    throw err;
+  }
+  process.stdout.write(`${green('Created')}: ${repoPath} ${dim(`(${typeName}${hubKind})`)}\n`);
+  if (rootHint) process.stdout.write(dim(rootHint));
+
+  // Existing children discovered before the transaction are consistently left
+  // unchanged; absent children and the hub publish or roll back together.
+  for (const c of runlistChildren) {
+    const childPath = path.join(baseDir, c.file);
+    if (!childPaths.includes(childPath)) continue;
     process.stdout.write(`${green('Created')}: ${toRepoPath(childPath, config.repoRoot)} ${dim(`(plan · runlist child, ${childStatus})`)}\n`);
   }
 

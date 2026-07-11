@@ -107,7 +107,11 @@ export function buildIndex(config, opts = {}) {
     // always the canonical full set; CLI-level `--root`/`--type` filtering
     // runs after `buildIndex` returns, so a rewrite is safe. Off by default
     // so dry-run / print modes never mutate disk as a side effect.
-    const indexCheck = checkIndex(transformedDocs, config, { autoHeal: autoHealIndex });
+    const indexCheck = checkIndex(transformedDocs, config, {
+      autoHeal: autoHealIndex,
+      rebuildDocs: autoHealIndex ? () => buildIndex(config, { fast: true }).docs : null,
+      testHooks: opts.testHooks,
+    });
     warnings.push(...indexCheck.warnings);
     errors.push(...indexCheck.errors);
   }

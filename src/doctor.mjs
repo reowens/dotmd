@@ -4,7 +4,7 @@ import { fixBrokenRefs } from './fix-refs.mjs';
 import { runLint } from './lint.mjs';
 import { runTouch } from './lifecycle.mjs';
 import { buildIndex, collectDocFiles } from './index.mjs';
-import { renderIndexFile, writeIndex } from './index-file.mjs';
+import { writeRenderedIndex } from './index-file.mjs';
 import { renderCheck, renderManualFixes } from './render.mjs';
 import { bold, dim, green, yellow } from './color.mjs';
 import { checkClaudeCommands, removeGeneratedSlashCommands } from './claude-commands.mjs';
@@ -66,7 +66,7 @@ export function runDoctor(argv, config, opts = {}) {
     return;
   }
 
-  const { dryRun } = opts;
+  const { dryRun, testHooks } = opts;
   // 0.37.0 (F4): the mode banner makes it impossible to mistake a preview run
   // for a real one — and tells the user the exact flag that flips it.
   const modeNote = dryRun
@@ -102,8 +102,7 @@ export function runDoctor(argv, config, opts = {}) {
   } else if (dryRun) {
     process.stdout.write('[dry-run] Would regenerate index.\n');
   } else {
-    const index = buildIndex(config);
-    writeIndex(renderIndexFile(index, config), config);
+    writeRenderedIndex(() => buildIndex(config, { fast: true }), config, { testHooks });
     process.stdout.write('Index updated.\n');
   }
 

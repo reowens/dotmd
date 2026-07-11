@@ -2,7 +2,7 @@
 type: doc
 status: review
 created: 2026-07-09T23:16:17Z
-updated: 2026-07-09T23:27:20Z
+updated: 2026-07-11T18:31:34Z
 modules:
   - cli
   - lifecycle

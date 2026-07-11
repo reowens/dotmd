@@ -228,13 +228,54 @@ export function gitMv(source, target, repoRoot) {
   return { status: result.status, stderr: result.stderr };
 }
 
-function isTracked(source, repoRoot) {
+export function isTracked(source, repoRoot) {
   const relSource = path.isAbsolute(source) ? path.relative(repoRoot, source) : source;
   const result = spawnSync('git', ['ls-files', '--error-unmatch', '--', relSource], {
     cwd: repoRoot,
     encoding: 'utf8',
   });
   return result.status === 0;
+}
+
+export function stageMovePaths(source, target, repoRoot) {
+  const paths = [source, target].map(candidate => path.isAbsolute(candidate) ? path.relative(repoRoot, candidate) : candidate);
+  const result = spawnSync('git', ['add', '-A', '--', ...paths], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(`Could not stage moved document: ${result.error?.message || result.stderr.trim() || 'git add failed'}`);
+  }
+}
+
+export function captureGitIndexPaths(paths, repoRoot) {
+  const relative = paths.map(candidate => path.isAbsolute(candidate) ? path.relative(repoRoot, candidate) : candidate);
+  const result = spawnSync('git', ['ls-files', '--stage', '-z', '--', ...relative], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(`Could not snapshot Git index: ${result.error?.message || result.stderr.trim() || 'git ls-files failed'}`);
+  }
+  return { paths: relative, records: result.stdout.split('\0').filter(Boolean) };
+}
+
+export function restoreGitIndexPaths(snapshot, repoRoot) {
+  const firstHash = snapshot.records[0]?.match(/^\d+ ([0-9a-f]+) /)?.[1];
+  const removals = snapshot.paths.map(filePath => `0 ${'0'.repeat(firstHash?.length ?? 40)}\t${filePath}\n`);
+  const records = snapshot.records.map(record => {
+    const match = /^(\d+) ([0-9a-f]+) (\d+)\t([\s\S]+)$/.exec(record);
+    if (!match) throw new Error(`Unexpected Git index record: ${record}`);
+    return `${match[1]} ${match[2]} ${match[3]}\t${match[4]}\n`;
+  });
+  const restored = spawnSync('git', ['update-index', '--index-info'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    input: [...removals, ...records].join(''),
+  });
+  if (restored.error || restored.status !== 0) {
+    throw new Error(`Could not restore Git index: ${restored.error?.message || restored.stderr.trim() || 'git update-index failed'}`);
+  }
 }
 
 export function gitDiffSince(relPath, sinceDate, repoRoot, opts = {}) {

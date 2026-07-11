@@ -1,9 +1,11 @@
 import { describe, it, afterEach } from 'node:test';
-import { strictEqual, ok } from 'node:assert';
+import { strictEqual, ok, rejects } from 'node:assert';
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { resolveConfig } from '../src/config.mjs';
+import { runNew } from '../src/new.mjs';
 
 const BIN = path.resolve(import.meta.dirname, '..', 'bin', 'dotmd.mjs');
 let tmpDir;
@@ -871,6 +873,30 @@ describe('dotmd new — type-first CLI', () => {
 });
 
 describe('dotmd new — runlist / coordination scaffolding', () => {
+  it('rolls the hub and every child back when child publication fails', async () => {
+    const docsDir = setupProject();
+    const config = await resolveConfig(tmpDir, path.join(tmpDir, 'dotmd.config.mjs'));
+    await rejects(runNew(['plan', 'atomic-hub', 'Atomic hub body.', '--runlist', 'one,two'], config, {
+      testHooks: { afterSetCommit: count => { if (count === 2) throw new Error('child publication failure'); } },
+    }), /child publication failure/);
+    strictEqual(existsSync(path.join(docsDir, 'plans', 'atomic-hub.md')), false);
+    strictEqual(existsSync(path.join(docsDir, 'plans', 'atomic-hub-01-one.md')), false);
+    strictEqual(existsSync(path.join(docsDir, 'plans', 'atomic-hub-02-two.md')), false);
+  });
+
+  it('leaves pre-existing runlist children unchanged while atomically creating the hub and absent children', () => {
+    const docsDir = setupProject();
+    const plans = path.join(docsDir, 'plans');
+    mkdirSync(plans, { recursive: true });
+    const existing = path.join(plans, 'mixed-hub-01-one.md');
+    writeFileSync(existing, 'existing-child\n');
+    const result = run(['new', 'plan', 'mixed-hub', '--runlist', 'one,two']);
+    strictEqual(result.status, 0, result.stderr);
+    strictEqual(readFileSync(existing, 'utf8'), 'existing-child\n');
+    ok(existsSync(path.join(plans, 'mixed-hub.md')));
+    ok(existsSync(path.join(plans, 'mixed-hub-02-two.md')));
+    ok(/left as-is/.test(result.stderr));
+  });
   it('--runlist creates a sprint hub plus one child stub per slug', () => {
     const docsDir = setupProject();
     const r = run(['new', 'plan', 'auth-revamp', '--runlist', 'extract,rewrite,cleanup']);

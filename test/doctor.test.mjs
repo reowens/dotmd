@@ -4,6 +4,8 @@ import { existsSync, mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { resolveConfig } from '../src/config.mjs';
+import { runDoctor } from '../src/doctor.mjs';
 
 let tmpDir;
 
@@ -44,6 +46,40 @@ afterEach(() => {
 });
 
 describe('doctor command', () => {
+  it('rescans documents inside the index lock before rendering', async () => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'dotmd-doctor-index-race-'));
+    spawnSync('git', ['init'], { cwd: tmpDir });
+    spawnSync('git', ['config', 'user.email', 'test@test.com'], { cwd: tmpDir });
+    spawnSync('git', ['config', 'user.name', 'Test'], { cwd: tmpDir });
+    mkdirSync(path.join(tmpDir, 'docs'), { recursive: true });
+    writeFileSync(path.join(tmpDir, 'dotmd.config.mjs'), `
+      export const root = 'docs';
+      export const index = {
+        path: 'docs/docs.md',
+        startMarker: '<!-- START -->',
+        endMarker: '<!-- END -->',
+      };
+    `);
+    const docPath = path.join(tmpDir, 'docs', 'race.md');
+    writeFileSync(docPath, '---\ntype: plan\nstatus: active\ntitle: Race\nupdated: 2025-01-01\n---\n# Race\n');
+    const indexPath = path.join(tmpDir, 'docs', 'docs.md');
+    writeFileSync(indexPath, '# Docs\n\n<!-- START -->\n\nstale\n\n<!-- END -->\n');
+    spawnSync('git', ['add', '.'], { cwd: tmpDir });
+    spawnSync('git', ['commit', '-m', 'init'], { cwd: tmpDir });
+    const config = await resolveConfig(tmpDir, path.join(tmpDir, 'dotmd.config.mjs'));
+
+    runDoctor([], config, {
+      dryRun: false,
+      testHooks: { beforeMutationSnapshot: () => {
+        writeFileSync(docPath, readFileSync(docPath, 'utf8').replace('status: active', 'status: planned'));
+      } },
+    });
+
+    const rendered = readFileSync(indexPath, 'utf8');
+    ok(rendered.includes('## Planned'), rendered);
+    ok(!rendered.includes('## Active'), rendered);
+  });
+
   it('runs all steps without crashing', () => {
     tmpDir = mkdtempSync(path.join(os.tmpdir(), 'dotmd-doctor-'));
     spawnSync('git', ['init'], { cwd: tmpDir });

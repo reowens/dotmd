@@ -26,7 +26,7 @@ runlist:
   - ../archived/dotmd-primary-consumer-hardening-07-guard-privacy.md
   - ../archived/dotmd-primary-consumer-hardening-11-notion-removal.md
   - ../archived/dotmd-primary-consumer-hardening-03-managed-path-containment.md
-  - dotmd-primary-consumer-hardening-04-atomic-mutation.md
+  - ../archived/dotmd-primary-consumer-hardening-04-atomic-mutation.md
   - dotmd-primary-consumer-hardening-05-lifecycle-ownership.md
   - dotmd-primary-consumer-hardening-06-transactional-moves.md
   - dotmd-primary-consumer-hardening-12-path-identity-outputs.md
@@ -96,7 +96,7 @@ Fixing findings independently would duplicate logic and preserve the underlying 
 3. [Guard Privacy](../archived/dotmd-primary-consumer-hardening-07-guard-privacy.md) ⬜
 4. [Notion Removal](../archived/dotmd-primary-consumer-hardening-11-notion-removal.md) ⬜
 5. [Managed Path Containment](../archived/dotmd-primary-consumer-hardening-03-managed-path-containment.md) ⬜
-6. [Atomic Mutation](dotmd-primary-consumer-hardening-04-atomic-mutation.md) ⬜
+6. [Atomic Mutation](../archived/dotmd-primary-consumer-hardening-04-atomic-mutation.md) ⬜
 7. [Lifecycle Ownership](dotmd-primary-consumer-hardening-05-lifecycle-ownership.md) ⬜
 8. [Transactional Moves](dotmd-primary-consumer-hardening-06-transactional-moves.md) ⬜
 9. [Path Identity Outputs](dotmd-primary-consumer-hardening-12-path-identity-outputs.md) ⬜

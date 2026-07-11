@@ -5,7 +5,7 @@ import { asString, toRepoPath, die, warn, currentSessionId } from './util.mjs';
 import { buildIndex, resolveDocArg } from './index.mjs';
 import { readJournalEntries } from './journal.mjs';
 import { runNew, readBodyInput } from './new.mjs';
-import { runSet, updateFrontmatter } from './lifecycle.mjs';
+import { runSet, updateFrontmatterAtomic } from './lifecycle.mjs';
 import { resolvePromptInput } from './prompts.mjs';
 import { green, dim } from './color.mjs';
 import { authorizeManagedSource } from './managed-path.mjs';
@@ -220,7 +220,7 @@ export async function runBaton(argv, config, opts = {}) {
       const promptPath = resolvePromptInput(createdSlug, config, { dieOnMiss: false });
       if (promptPath) {
         authorizeManagedSource(promptPath, config, { kind: 'Baton prompt source' });
-        updateFrontmatter(promptPath, { plan: repoPath });
+        updateFrontmatterAtomic(promptPath, { plan: repoPath }, config);
       }
     } catch { /* stamping is best-effort */ }
   }

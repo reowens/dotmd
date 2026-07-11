@@ -3,14 +3,99 @@ import path from 'node:path';
 import { extractFrontmatter, parseSimpleFrontmatter, normalizeEol } from './frontmatter.mjs';
 import { asString, toRepoPath, die, warn, resolveDocPath, resolveRefPath, escapeRegex, nowIso, suggestCandidates, emitFilesFooter, isArchivedPath, currentSessionId } from './util.mjs';
 import { readJournalEntries } from './journal.mjs';
-import { gitMv, getGitLastModifiedBatch } from './git.mjs';
+import { captureGitIndexPaths, getGitLastModifiedBatch, isTracked, restoreGitIndexPaths, stageMovePaths } from './git.mjs';
 import { buildIndex, collectDocFiles, resolveDocArg } from './index.mjs';
-import { renderIndexFile, writeIndex } from './index-file.mjs';
+import { writeRenderedIndex } from './index-file.mjs';
 import { green, dim } from './color.mjs';
 import { isInteractive, promptChoice } from './prompt.mjs';
 import { buildCard, renderCard } from './pickup-card.mjs';
 import { walkSections, findSection } from './section.mjs';
 import { authorizeManagedDestination, authorizeManagedSource, authorizeManagedSweep } from './managed-path.mjs';
+import { withPathLocks, snapshotFile, replaceSnapshot, moveFileAtomic, mutateFile } from './atomic-mutation.mjs';
+
+function renderLifecycleMutation(raw, updates, historyEntry, { createSection = false, bodyTransform = null } = {}) {
+  raw = normalizeEol(raw);
+  if (!raw.startsWith('---\n')) throw new Error('Document has no frontmatter block. Retrofit it with `dotmd bulk-tag` first.');
+  const endMarker = raw.indexOf('\n---\n', 4);
+  if (endMarker === -1) throw new Error('Document has an unclosed frontmatter block.');
+  let frontmatter = raw.slice(4, endMarker);
+  let body = raw.slice(endMarker + 5);
+  if (bodyTransform) body = bodyTransform(body);
+  for (const [key, value] of Object.entries(updates)) {
+    const regex = new RegExp(`^${escapeRegex(key)}:.*$`, 'm');
+    frontmatter = regex.test(frontmatter)
+      ? frontmatter.replace(regex, `${key}: ${value}`)
+      : `${frontmatter}\n${key}: ${value}`;
+  }
+  if (historyEntry) {
+    const bullet = `- **${updates.updated ?? nowIso()}** ${historyEntry}`;
+    const vh = findSection(walkSections(body), 'Version History');
+    if (vh) {
+      const lines = body.split('\n');
+      let insertAt = vh.lineStart;
+      while (insertAt < lines.length && lines[insertAt].trim() === '') insertAt++;
+      lines.splice(insertAt, 0, bullet, ...(insertAt >= lines.length || lines[insertAt]?.startsWith('#') ? [''] : []));
+      body = lines.join('\n');
+    } else if (createSection) {
+      body = `${body.replace(/\n+$/, '')}\n\n## Version History\n\n${bullet}\n`;
+    }
+  }
+  return `---\n${frontmatter}\n---\n${body}`;
+}
+
+function commitLifecycleMutation(filePath, targetPath, config, updates, historyForOldStatus, options = {}) {
+  const render = sourceContent => {
+    const currentFm = parseSimpleFrontmatter(extractFrontmatter(sourceContent).frontmatter);
+    const currentOldStatus = asString(currentFm.status) ?? 'unknown';
+    let content = renderLifecycleMutation(sourceContent, updates, historyForOldStatus(currentOldStatus), options);
+    const beforeSelfRefs = content;
+    if (targetPath) content = renderMovedFileRefs(content, filePath, targetPath, config);
+    return {
+      oldStatus: currentOldStatus,
+      content,
+      selfRefsFixed: content !== beforeSelfRefs,
+    };
+  };
+  if (targetPath) {
+    let result;
+    const tracked = isTracked(filePath, config.repoRoot);
+    const gitIndex = tracked ? captureGitIndexPaths([filePath, targetPath], config.repoRoot) : null;
+    const allFiles = collectDocFiles(config).filter(candidate => candidate !== filePath && candidate !== targetPath);
+    authorizeManagedSweep(allFiles, config, { kind: 'Reference rewrite source' });
+    const moveResult = moveFileAtomic(filePath, targetPath, sourceContent => {
+      result = render(sourceContent);
+      return result.content;
+    }, {
+      repoRoot: config.repoRoot,
+      updates: allFiles.map(docFile => ({
+        path: docFile,
+        render: raw => renderInboundRefs(raw, docFile, filePath, targetPath, config),
+      })),
+      finalize: tracked ? () => stageMovePaths(filePath, targetPath, config.repoRoot) : null,
+      rollbackFinalize: tracked ? () => restoreGitIndexPaths(gitIndex, config.repoRoot) : null,
+      testHooks: options.testHooks,
+    });
+    return { ...result, sourceContent: moveResult.source.content, updatedPaths: moveResult.updatedPaths };
+  }
+  return withPathLocks([filePath], { repoRoot: config.repoRoot }, () => {
+    const sourceSnapshot = snapshotFile(filePath);
+    const result = render(sourceSnapshot.content);
+    replaceSnapshot(sourceSnapshot, result.content, { repoRoot: config.repoRoot, locked: true });
+    return { ...result, sourceContent: sourceSnapshot.content, updatedPaths: [] };
+  });
+}
+
+export function updateFrontmatterAtomic(filePath, updates, config, options = {}) {
+  return mutateFile(filePath, { repoRoot: config.repoRoot }, raw => {
+    if (options.expected) {
+      const current = parseSimpleFrontmatter(extractFrontmatter(raw).frontmatter);
+      for (const [key, value] of Object.entries(options.expected)) {
+        if (asString(current[key]) !== value) throw new Error(`${key} changed while the mutation was being prepared.`);
+      }
+    }
+    return renderLifecycleMutation(raw, updates, null);
+  });
+}
 
 function findFileRoot(filePath, config) {
   const roots = config.docsRoots || [config.docsRoot];
@@ -57,8 +142,7 @@ export function regenIndex(config) {
     // index file only consumes status/title/snapshot/etc. Validation runs on
     // explicit `dotmd check` / `dotmd index`. This keeps lifecycle commands
     // snappy on repos with huge git history or heavy `validate` hooks.
-    const index = buildIndex(config, { fast: true });
-    writeIndex(renderIndexFile(index, config), config);
+    writeRenderedIndex(() => buildIndex(config, { fast: true }), config);
   } catch (err) {
     warn(`Could not regenerate index (run \`dotmd index\`): ${err.message}`);
   }
@@ -266,33 +350,11 @@ export async function runStatus(argv, config, opts = {}) {
     return;
   }
 
-  updateFrontmatter(filePath, { status: newStatus, updated: today });
-  const transition = `Status: ${oldStatus ?? 'unknown'} → ${newStatus}`;
-  // A --note must land even when the doc has no Version History section yet;
-  // the plain transition entry stays best-effort (bare docs skip it).
-  appendVersionHistory(filePath, note ? `${transition} — ${note}` : `${transition}.`, { createSection: Boolean(note) });
-
-  if (isArchiving) {
-    mkdirSync(targetDir, { recursive: true });
-    const result = gitMv(filePath, targetPath, config.repoRoot);
-    if (result.status !== 0) { die(result.stderr || 'git mv failed.'); }
-  }
-
-  if (isUnarchiving) {
-    const result = gitMv(filePath, targetPath, config.repoRoot);
-    if (result.status !== 0) { die(result.stderr || 'git mv failed.'); }
-  }
-
-  if (isFiling) {
-    mkdirSync(targetDir, { recursive: true });
-    const result = gitMv(filePath, targetPath, config.repoRoot);
-    if (result.status !== 0) { die(result.stderr || 'git mv failed.'); }
-  }
-
-  if (isUnfiling) {
-    const result = gitMv(filePath, targetPath, config.repoRoot);
-    if (result.status !== 0) { die(result.stderr || 'git mv failed.'); }
-  }
+  if (targetDir) mkdirSync(targetDir, { recursive: true });
+  const mutationResult = commitLifecycleMutation(filePath, targetPath, config, { status: newStatus, updated: today }, currentOld => {
+    const currentTransition = `Status: ${currentOld} → ${newStatus}`;
+    return note ? `${currentTransition} — ${note}` : `${currentTransition}.`;
+  }, { createSection: Boolean(note) });
 
   // Any of the four moves above shifts the file's directory, which breaks
   // relative refs in both directions — links FROM the moved file and inbound
@@ -300,15 +362,9 @@ export async function runStatus(argv, config, opts = {}) {
   // the deprecated `dotmd status <file> archived` path and the `dotmd set`
   // unarchive/file/unfile transitions (which route through runStatus, not
   // runArchive) don't silently leave dangling links.
-  let selfRefsFixed = false;
-  let inboundRefCount = 0;
-  let inboundRefPaths = [];
-  if (finalPath !== filePath) {
-    selfRefsFixed = updateRefsFromMovedFile(filePath, finalPath, config) > 0;
-    const inbound = updateRefsAfterMove(filePath, finalPath, config);
-    inboundRefCount = inbound.count;
-    inboundRefPaths = inbound.paths;
-  }
+  const selfRefsFixed = Boolean(mutationResult.selfRefsFixed);
+  const inboundRefPaths = mutationResult.updatedPaths ?? [];
+  const inboundRefCount = inboundRefPaths.length;
 
   // Regen the index on every status change — `active → planned` etc. drift
   // the per-status sections just as much as archive crossings. Archive paths
@@ -392,8 +448,8 @@ export async function startPlan(argv, config, opts = {}) {
       process.stderr.write(`${dim('[dry-run]')} Would update: status: ${oldStatus} → in-session, updated: ${today}\n`);
     }
   } else if (oldStatus !== 'in-session') {
-    updateFrontmatter(filePath, { status: 'in-session', updated: today });
-    appendVersionHistory(filePath, `Started (${oldStatus ?? 'unknown'} → in-session).`);
+    commitLifecycleMutation(filePath, null, config, { status: 'in-session', updated: today },
+      currentOld => `Started (${currentOld} → in-session).`);
     if (noIndex) {
       process.stderr.write(dim('(index not regenerated — run `dotmd index` to refresh)\n'));
     } else {
@@ -492,9 +548,9 @@ export function runArchive(argv, config, opts = {}) {
       out.write(`${prefix} Would skip git mv (file already under \`${config.archiveDir}/\`)\n`);
       return;
     }
-    updateFrontmatter(filePath, { status: targetStatus, updated: today });
-    const healEntry = `Archived (frontmatter healed in place from \`${oldStatus}\`)${note ? ` — ${note}` : '.'}`;
-    appendVersionHistory(filePath, healEntry, { createSection: Boolean(note) });
+    commitLifecycleMutation(filePath, null, config, { status: targetStatus, updated: today },
+      currentOld => `Archived (frontmatter healed in place from \`${currentOld}\`)${note ? ` — ${note}` : '.'}`,
+      { createSection: Boolean(note) });
     if (!noIndex) regenIndex(config);
     out.write(`${green('✓ Healed')}: ${repoPathHeal} (${oldStatus} → ${targetStatus}; file already under \`${config.archiveDir}/\`)\n`);
     const touched = [repoPathHeal];
@@ -509,6 +565,7 @@ export function runArchive(argv, config, opts = {}) {
   }
 
   const closeoutAction = closeoutTemplate ? planCloseoutInjection(body) : null;
+  let committedCloseoutAction = closeoutAction;
 
   const today = nowIso();
   // Type-aware: prompts archive under docs/prompts/archived/ by default (see
@@ -549,30 +606,27 @@ export function runArchive(argv, config, opts = {}) {
     return;
   }
 
-  if (closeoutAction?.action === 'inject') {
-    writeFileSync(filePath, `---\n${frontmatter}\n---\n${closeoutAction.newBody}`, 'utf8');
-  }
-
-  updateFrontmatter(filePath, { status: targetStatus, updated: today });
-  appendVersionHistory(filePath, note ? `Archived — ${note}` : 'Archived.', { createSection: Boolean(note) });
-
   mkdirSync(targetDir, { recursive: true });
+  const mutationResult = commitLifecycleMutation(filePath, targetPath, config, { status: targetStatus, updated: today },
+    () => note ? `Archived — ${note}` : 'Archived.', {
+      createSection: Boolean(note),
+      testHooks: opts.testHooks,
+      bodyTransform: closeoutTemplate ? currentBody => {
+        committedCloseoutAction = planCloseoutInjection(currentBody);
+        return committedCloseoutAction.action === 'inject' ? committedCloseoutAction.newBody : currentBody;
+      } : null,
+    });
 
-  const result = gitMv(filePath, targetPath, config.repoRoot);
-  if (result.status !== 0) { die(result.stderr || 'git mv failed.'); }
-
-  // Fix refs FROM the archived file (relative paths shifted by move)
-  const selfRefsFixed = updateRefsFromMovedFile(filePath, targetPath, config);
-
-  // Auto-update references in other docs
-  const { count: updatedRefCount, paths: refTouchedPaths } = updateRefsAfterMove(filePath, targetPath, config);
+  const selfRefsFixed = mutationResult.selfRefsFixed;
+  const refTouchedPaths = mutationResult.updatedPaths;
+  const updatedRefCount = refTouchedPaths.length;
 
   if (!noIndex) regenIndex(config);
 
   out.write(`${green('Archived')}: ${oldRepoPath} → ${newRepoPath}\n`);
-  if (closeoutAction?.action === 'inject') {
+  if (committedCloseoutAction?.action === 'inject') {
     out.write(`Injected \`## Closeout\` template — fill in: outcomes, key commits, deferrals.\n`);
-  } else if (closeoutAction?.action === 'skip') {
+  } else if (committedCloseoutAction?.action === 'skip') {
     out.write(dim('(closeout template skipped — `## Closeout` section already present)\n'));
   }
   if (selfRefsFixed) out.write('Updated references in archived file.\n');
@@ -591,6 +645,8 @@ export function runArchive(argv, config, opts = {}) {
     oldRepoPath,
     newRepoPath,
     touched,
+    consumedBody: extractFrontmatter(mutationResult.sourceContent).body,
+    consumedFrontmatter: parseSimpleFrontmatter(extractFrontmatter(mutationResult.sourceContent).frontmatter),
   };
 }
 
@@ -818,7 +874,14 @@ export function runTouch(argv, config, opts = {}) {
       if (fmUpdated && fmUpdated >= gitDay) continue;
 
       if (!dryRun) {
-        updateFrontmatter(filePath, { updated: gitDay });
+        const result = mutateFile(filePath, { repoRoot: config.repoRoot, testHooks: opts.testHooks }, current => {
+          const currentFm = parseSimpleFrontmatter(extractFrontmatter(current).frontmatter);
+          if (config.lifecycle.skipStaleFor.has(asString(currentFm.status))) return current;
+          const currentUpdated = asString(currentFm.updated);
+          if (currentUpdated && currentUpdated >= gitDay) return current;
+          return renderLifecycleMutation(current, { updated: gitDay }, null);
+        });
+        if (!result.changed) continue;
       }
       process.stdout.write(`${prefix}${green('Synced')}: ${repoPath} (updated → ${gitDay})\n`);
       synced++;
@@ -844,7 +907,7 @@ export function runTouch(argv, config, opts = {}) {
     return;
   }
 
-  updateFrontmatter(filePath, { updated: today });
+  mutateFile(filePath, { repoRoot: config.repoRoot, testHooks: opts.testHooks }, current => renderLifecycleMutation(current, { updated: today }, null));
   process.stdout.write(`${green('Touched')}: ${toRepoPath(filePath, config.repoRoot)} (updated → ${today})\n`);
 
   try { config.hooks.onTouch?.({ path: toRepoPath(filePath, config.repoRoot) }, { path: toRepoPath(filePath, config.repoRoot), date: today }); } catch (err) { warn(`Hook 'onTouch' threw: ${err.message}`); }
@@ -876,52 +939,29 @@ function rewriteFrontmatterRefs(fm, docDir, oldPath, newPath, repoRoot) {
  * After a file moves (archive/unarchive), update frontmatter references in all
  * docs that pointed to the old location so they point to the new one.
  */
-function updateRefsAfterMove(oldPath, newPath, config) {
+function renderInboundRefs(raw, docFile, oldPath, newPath, config) {
   const basename = path.basename(oldPath);
-  const allFiles = collectDocFiles(config);
-  authorizeManagedSweep(allFiles, config, { kind: 'Reference rewrite source' });
-  const touched = [];
-
-  for (const docFile of allFiles) {
-    if (docFile === newPath) continue;
-    const raw = readFileSync(docFile, 'utf8');
-    if (!raw.includes(basename)) continue;
-    const { frontmatter: fm, body } = extractFrontmatter(raw);
-    if (!fm) continue;
-
-    const docDir = path.dirname(docFile);
-    const newFm = rewriteFrontmatterRefs(fm, docDir, oldPath, newPath, config.repoRoot);
-
-    // Body markdown links [text](path.md) or [text](path.md#anchor) pointing
-    // at oldPath. resolveRefPath can't be used here: oldPath no longer exists
-    // on disk (git mv already ran), so its existsSync probe would fail. Match
-    // by resolving the href manually and comparing absolute paths instead.
-    const linkRegex = /(\[[^\]]*\]\()([^)#]+\.md)(#[^)]*)?(\))/g;
-    const newBody = body.replace(linkRegex, (match, pre, href, frag, post) => {
-      if (/^https?:/i.test(href)) return match;
-      const docRelAbs = path.resolve(docDir, href);
-      const repoRelAbs = path.resolve(config.repoRoot, href);
-      if (docRelAbs !== oldPath && repoRelAbs !== oldPath) return match;
-      const newHref = path.relative(docDir, newPath).split(path.sep).join('/');
-      return `${pre}${newHref}${frag ?? ''}${post}`;
-    });
-
-    if (newFm !== fm || newBody !== body) {
-      writeFileSync(docFile, `---\n${newFm}\n---\n${newBody}`, 'utf8');
-      touched.push(docFile);
-    }
-  }
-
-  return { count: touched.length, paths: touched };
+  if (!raw.includes(basename)) return raw;
+  const { frontmatter: fm, body } = extractFrontmatter(raw);
+  if (!fm) return raw;
+  const docDir = path.dirname(docFile);
+  const newFm = rewriteFrontmatterRefs(fm, docDir, oldPath, newPath, config.repoRoot);
+  const linkRegex = /(\[[^\]]*\]\()([^)#]+\.md)(#[^)]*)?(\))/g;
+  const newBody = body.replace(linkRegex, (match, pre, href, frag, post) => {
+    if (/^https?:/i.test(href)) return match;
+    const docRelAbs = path.resolve(docDir, href);
+    const repoRelAbs = path.resolve(config.repoRoot, href);
+    if (docRelAbs !== oldPath && repoRelAbs !== oldPath) return match;
+    const newHref = path.relative(docDir, newPath).split(path.sep).join('/');
+    return `${pre}${newHref}${frag ?? ''}${post}`;
+  });
+  return newFm === fm && newBody === body ? raw : `---\n${newFm}\n---\n${newBody}`;
 }
 
-function updateRefsFromMovedFile(oldPath, newPath, config) {
-  authorizeManagedSource(newPath, config, { kind: 'Moved document rewrite source' });
+function renderMovedFileRefs(raw, oldPath, newPath, config) {
   const oldDir = path.dirname(oldPath);
   const newDir = path.dirname(newPath);
-  if (oldDir === newDir) return 0;
-
-  let raw = readFileSync(newPath, 'utf8');
+  if (oldDir === newDir) return raw;
   const { frontmatter, body } = extractFrontmatter(raw);
 
   // Fix frontmatter ref fields (YAML list items like  - ./path.md).
@@ -954,12 +994,7 @@ function updateRefsFromMovedFile(oldPath, newPath, config) {
     return `${pre}${newHref}${frag ?? ''}${post}`;
   });
 
-  if (newFm !== frontmatter || newBody !== body) {
-    writeFileSync(newPath, `---\n${newFm}\n---\n${newBody}`, 'utf8');
-    return 1;
-  }
-
-  return 0;
+  return newFm !== frontmatter || newBody !== body ? `---\n${newFm}\n---\n${newBody}` : raw;
 }
 
 function countRefsToUpdate(oldPath, newPath, config) {

@@ -1739,9 +1739,8 @@ async function main() {
       runLint(['--fix'], config, { dryRun });
       if (config.indexPath) {
         if (!dryRun) {
-          const { renderIndexFile: rif, writeIndex: wi } = await import('../src/index-file.mjs');
-          const freshIndex = buildIndex(config);
-          wi(rif(freshIndex, config), config);
+          const { writeRenderedIndex } = await import('../src/index-file.mjs');
+          writeRenderedIndex(() => buildIndex(config, { fast: true }), config);
           process.stdout.write('Index regenerated.\n');
         } else {
           process.stdout.write('[dry-run] Would regenerate index.\n');
@@ -1800,7 +1799,7 @@ async function main() {
       die('Index generation is not configured. Add an `index` section to your dotmd.config.mjs.');
     }
     const print = args.includes('--print');
-    const { renderIndexFile, writeIndex } = await import('../src/index-file.mjs');
+    const { renderIndexFile, writeRenderedIndex } = await import('../src/index-file.mjs');
     if (!print) {
       const { authorizeRepoGeneratedPath } = await import('../src/managed-path.mjs');
       authorizeRepoGeneratedPath(config.indexPath, config, { kind: 'Generated index destination' });
@@ -1811,7 +1810,7 @@ async function main() {
     } else if (dryRun) {
       process.stdout.write(`[dry-run] Would update ${config.indexPath}\n`);
     } else {
-      writeIndex(rendered, config);
+      writeRenderedIndex(() => buildIndex(config, { fast: true }), config);
       process.stdout.write(`Updated ${config.indexPath}\n`);
     }
     return;

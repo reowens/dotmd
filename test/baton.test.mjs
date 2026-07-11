@@ -190,6 +190,7 @@ describe('dotmd baton', () => {
     strictEqual(r.status, 0, r.stderr);
     const prompt = readFileSync(path.join(docsDir, 'prompts', 'resume-kinetic.md'), 'utf8');
     match(prompt, /^plan:\s*docs\/plans\/kinetic\.md\s*$/m);
+    match(prompt, /resume kinetic/, 'atomic link stamping preserves the prompt body');
   });
 
   it('round-trip: consuming a baton prompt claims its plan so the next baton hands it off', () => {
