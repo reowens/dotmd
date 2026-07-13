@@ -160,12 +160,13 @@ describe('atomic mutation substrate', () => {
       import { existsSync, writeFileSync } from 'node:fs';
       import { snapshotFile, replaceSnapshot } from ${JSON.stringify(modulePath)};
       const snapshot = snapshotFile(process.argv[1]);
-      replaceSnapshot(snapshot, process.argv[2], { repoRoot: process.argv[3], testHooks: { beforeReplacePublish: () => {
+      const content = 'NEW:' + 'b'.repeat(Number(process.argv[2]));
+      replaceSnapshot(snapshot, content, { repoRoot: process.argv[3], testHooks: { beforeReplacePublish: () => {
         writeFileSync(process.argv[4], 'ready');
         while (!existsSync(process.argv[5])) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
       } } });
     `;
-    const proc = child(code, [file, newContent, root, ready, gate]);
+    const proc = child(code, [file, '500000', root, ready, gate]);
     const done = completed(proc);
     await waitForFiles([ready]);
     strictEqual(readFileSync(file, 'utf8'), oldContent);

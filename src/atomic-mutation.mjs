@@ -33,6 +33,7 @@ export function processStartIdentity(pid) {
     const afterName = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/);
     return `linux:${afterName[19]}`;
   } catch { /* non-Linux or proc unavailable */ }
+  if (process.platform === 'win32') return null;
   try {
     const started = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', timeout: 1000 }).trim();
     return started ? `ps:${started}` : null;
@@ -56,7 +57,10 @@ export function processOwnerLiveness(owner) {
   try {
     process.kill(owner.pid, 0);
     const currentStart = processStartIdentity(owner.pid);
-    if (!owner.processStartIdentity || !currentStart) return 'unverifiable';
+    // If the host cannot expose process start times, an existing PID is still
+    // conservatively live. This may delay stale-lock recovery after PID reuse,
+    // but can never steal a live process's lock.
+    if (!owner.processStartIdentity || !currentStart) return 'live';
     return owner.processStartIdentity === currentStart ? 'live' : 'dead';
   } catch (err) {
     if (err?.code === 'ESRCH') return 'dead';

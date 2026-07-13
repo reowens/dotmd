@@ -435,7 +435,7 @@ function prepareMoveIndex(source, target, repoRoot, before, options = {}) {
   }
   if (before.exists && (lstatSync(preparedPath).mode & 0o7777) !== before.mode) {
     chmodSync(preparedPath, before.mode);
-    const fd = openSync(preparedPath, 'r');
+    const fd = openSync(preparedPath, 'r+');
     try { fsyncSync(fd); } finally { closeSync(fd); }
   }
   const generation = captureIndexPath(preparedPath);
@@ -444,7 +444,7 @@ function prepareMoveIndex(source, target, repoRoot, before, options = {}) {
   if (artifactPath !== preparedPath) {
     writeFileSync(artifactPath, readFileSync(preparedPath));
     chmodSync(artifactPath, generation.mode);
-    const artifactFd = openSync(artifactPath, 'r');
+    const artifactFd = openSync(artifactPath, 'r+');
     try { fsyncSync(artifactFd); } finally { closeSync(artifactFd); }
   }
   const prepared = { ...describePrepared(artifactPath, generation), state: 'prepared', tempPath: preparedPath, work };
