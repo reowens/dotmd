@@ -351,6 +351,70 @@ describe('dotmd baton', () => {
     const plan = readFileSync(path.join(plansDir, 'auth-revamp.md'), 'utf8');
     ok(plan.includes('status: in-session'), 'plan untouched');
   });
+
+  it('plan and slug JSON distinguish dry-run previews from applied operations', () => {
+    writePlan('preview-plan');
+    const plan = run(['baton', 'docs/plans/preview-plan.md', '--json', '--dry-run', '--message', 'resume']);
+    strictEqual(plan.status, 0, plan.stderr);
+    const planValue = JSON.parse(plan.stdout);
+    strictEqual(planValue.dryRun, true);
+    strictEqual(planValue.disposition, 'would-change');
+    strictEqual(planValue.wouldChange, true);
+    strictEqual(planValue.mode, 'plan');
+    const slug = run(['baton', 'preview-slug', '--json', '--dry-run', '--message', 'resume']);
+    strictEqual(slug.status, 0, slug.stderr);
+    const slugValue = JSON.parse(slug.stdout);
+    strictEqual(slugValue.dryRun, true);
+    strictEqual(slugValue.disposition, 'would-change');
+    strictEqual(slugValue.wouldChange, true);
+    strictEqual(slugValue.mode, 'slug');
+  });
+
+  it('--json reports repository/session/deferred files and leaves the tracked index byte-identical', () => {
+    writeFileSync(configPath, `
+      export const root = 'docs';
+      export const journal = true;
+      export const index = { path: 'docs/docs.md', startMarker: '<!-- START -->', endMarker: '<!-- END -->' };
+    `);
+    writeFileSync(path.join(docsDir, 'docs.md'), '# Index\n\n<!-- START -->\n\n<!-- END -->\n');
+    writePlan('structured', { status: 'active' });
+    strictEqual(run(['use', 'docs/plans/structured.md'], { sid: 'json-session' }).status, 0);
+    const indexBefore = readFileSync(path.join(docsDir, 'docs.md'));
+    const result = run(['baton', '--json', '--message', 'continue structured'], { sid: 'json-session' });
+    strictEqual(result.status, 0, result.stderr);
+    const value = JSON.parse(result.stdout);
+    strictEqual(value.operation, 'baton');
+    strictEqual(value.dryRun, false);
+    strictEqual(value.disposition, 'applied');
+    strictEqual(value.wouldChange, false);
+    strictEqual(value.status.from, 'in-session');
+    strictEqual(value.status.to, 'active');
+    ok(value.repositoryFiles.includes('docs/plans/structured.md'));
+    ok(value.sessionFiles.includes('docs/prompts/resume-structured.md'));
+    ok(value.sessionFiles.some(item => item.startsWith('.dotmd/ownership/')));
+    strictEqual(value.generatedFiles.length, 0);
+    ok(value.deferredGeneratedFiles.includes('docs/docs.md'));
+    strictEqual(Buffer.compare(readFileSync(path.join(docsDir, 'docs.md')), indexBefore), 0);
+  });
+
+  it('slug mode defers the tracked index and reports only the actual prompt session file', () => {
+    writeFileSync(configPath, `
+      export const root = 'docs';
+      export const index = { path: 'docs/docs.md', startMarker: '<!-- START -->', endMarker: '<!-- END -->' };
+    `);
+    writeFileSync(path.join(docsDir, 'docs.md'), '# Index\n\n<!-- START -->\nkeep\n<!-- END -->\n');
+    const before = readFileSync(path.join(docsDir, 'docs.md'));
+    const result = run(['baton', 'standalone', '--json', '--message', 'continue standalone']);
+    strictEqual(result.status, 0, result.stderr);
+    const value = JSON.parse(result.stdout);
+    strictEqual(value.mode, 'slug');
+    strictEqual(value.repositoryFiles.length, 0);
+    strictEqual(value.sessionFiles.length, 1);
+    strictEqual(value.sessionFiles[0], 'docs/prompts/resume-standalone.md');
+    strictEqual(value.generatedFiles.length, 0);
+    ok(value.deferredGeneratedFiles.includes('docs/docs.md'));
+    strictEqual(Buffer.compare(readFileSync(path.join(docsDir, 'docs.md')), before), 0);
+  });
 });
 
 describe('dotmd hud --json owned', () => {

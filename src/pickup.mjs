@@ -94,6 +94,23 @@ export function canonicalPlanIdentity(filePath, config) {
   };
 }
 
+export function plannedPlanIdentity(filePath, config) {
+  const absolute = path.resolve(filePath);
+  let parent = path.dirname(absolute);
+  const suffix = [path.basename(absolute)];
+  while (!existsSync(parent)) {
+    suffix.unshift(path.basename(parent));
+    parent = path.dirname(parent);
+  }
+  const canonicalPath = canonicalizePathEntrySpelling(path.join(realpathSync(parent), ...suffix));
+  return {
+    canonicalPath,
+    key: createHash('sha256').update(canonicalPath).digest('hex'),
+    repoPath: path.relative(realpathSync(config.repoRoot), canonicalPath).split(path.sep).join('/'),
+    managedPath: absolute,
+  };
+}
+
 function recordPathForIdentity(identity, config) {
   return authorizeRepoGeneratedPath(path.join(ownershipRoot(config), `${identity.key}.json`), config, {
     kind: 'Plan ownership record',
@@ -139,6 +156,31 @@ export function readPlanOwnership(repoPath, config) {
   if (!existsSync(recordPath)) return null;
   try { return validateBinding(parseOwnership(readFileSync(recordPath, 'utf8'), recordPath), identity, config); }
   catch { return { corrupt: true, recordPath, raw: null, reason: 'unreadable ownership record' }; }
+}
+
+export function prepareOwnershipMigration(oldRepoPath, newPath, config, { sessionId = authoritativeSessionId(), now = new Date().toISOString() } = {}) {
+  const ownership = readPlanOwnership(oldRepoPath, config);
+  if (!ownership) return null;
+  if (ownership.corrupt) throw new Error(`Ownership record is corrupt for ${oldRepoPath}: ${ownership.reason}; repair or release it before rename.`);
+  if (ownership.state === 'owned' && ownership.sessionId !== sessionId) {
+    throw new Error(`Plan is busy in another session (${ownership.sessionId}): ${oldRepoPath}`);
+  }
+  const identity = plannedPlanIdentity(newPath, config);
+  const recordPath = recordPathForIdentity(identity, config);
+  const content = recordContent({
+    identity,
+    sessionId: ownership.sessionId,
+    state: ownership.state,
+    now,
+    claimedAt: ownership.claimedAt,
+    operation: ownership.operation,
+  });
+  return {
+    oldRecordPath: ownership.recordPath,
+    oldContent: ownership.raw,
+    newRecordPath: recordPath,
+    newContent: content,
+  };
 }
 
 export function listOwnedPlans(config, sessionId = authoritativeSessionId()) {

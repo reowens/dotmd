@@ -938,15 +938,24 @@ export async function runNew(argv, config, opts = {}) {
     }
   } catch { /* git absent / not a repo — skip the note */ }
 
-  regenIndex(config);
+  const indexRegenerated = !opts.deferIndex ? regenIndex(config) : false;
 
   if (showFiles) {
     const touched = [filePath, ...childPaths];
-    if (config.indexPath) touched.push(config.indexPath);
+    if (config.indexPath && !opts.deferIndex) touched.push(config.indexPath);
     emitFilesFooter(touched, config);
   }
 
   try { config.hooks.onNew?.({ path: repoPath, status, title: docTitle, type: typeName }); } catch (err) { warn(`Hook 'onNew' threw: ${err.message}`); }
+  const sessionLocal = typeName === 'prompt';
+  return {
+    operation: 'new',
+    repositoryFiles: sessionLocal ? [] : [repoPath, ...childPaths.map(item => toRepoPath(item, config.repoRoot))],
+    sessionFiles: sessionLocal ? [repoPath] : [],
+    generatedFiles: config.indexPath && indexRegenerated ? [toRepoPath(config.indexPath, config.repoRoot)] : [],
+    deferredGeneratedFiles: config.indexPath && opts.deferIndex ? [toRepoPath(config.indexPath, config.repoRoot)] : [],
+    path: repoPath,
+  };
 }
 
 function resolveTemplate(name, config) {

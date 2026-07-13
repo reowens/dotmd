@@ -49,7 +49,7 @@ const FLAG_SPECS = {
   'agent-context': { flags: new Set(['--json']), values: new Set() },
   hud: { flags: new Set(['--json', '--subagent']), values: new Set() },
   // '-' is the stdin marker (a positional, not a flag) — listed so validation lets it through.
-  baton: { flags: new Set(['--status', '--note', '--body', '--message', '--force', '--dry-run', '-n', '-']), values: new Set(['--status', '--note', '--body', '--message']) },
+  baton: { flags: new Set(['--status', '--note', '--body', '--message', '--force', '--json', '--dry-run', '-n', '-']), values: new Set(['--status', '--note', '--body', '--message']) },
   guard: { flags: new Set(), values: new Set() },
   misuse: { flags: new Set(['--json', '--tail', '--by-rule', '--repo']), values: new Set(['--tail', '--repo']) },
   update: { flags: new Set(['--check', '--cli-only', '--plugin-only']), values: new Set() },
@@ -1091,8 +1091,9 @@ Plan mode (a plan is in-session, or you pass one):
      never paste resume text into chat.
   2. Releases the plan: one status flip, in-session → active by default
      (--status to override, --note to record why in ## Version History).
-  3. Prints the exact \`git commit\` for the plan's frontmatter change — the
-     prompt stays OUT of the pathspec (it's session-local, often gitignored).
+  3. Defers the shared generated index and prints exact repository-only commit
+     guidance. Prompt and ownership records stay session-local and OUT of the
+     pathspec.
   Which plan? Pass it explicitly, or baton resolves exactly one plan owned by
   this authoritative session. Journal entries and global in-session counts never
   grant ownership. A live pickup-hook delivery lease blocks release and force
@@ -1111,6 +1112,7 @@ Options:
   --note "why"           Append the reason to ## Version History (plan mode only)
   --message / --body     Inline body (one-liners; prefer @path or stdin)
   --force                Recover another session's plan (explicit path required)
+  --json                 Structured repository/session/generated file result
   --dry-run, -n          Preview without writing
 
 Examples:
@@ -1225,8 +1227,10 @@ fix is to delete the explicit \`lifecycle\` block so flags take effect.`,
 
   bulk: `dotmd bulk archive <f1> <f2> ... — archive multiple files at once
 
-Archives each file: sets status to archived, moves to archive
-directory, updates references, and regenerates the index.
+Archives each file in an independent per-item transaction: sets status to
+archived, moves to archive directory, and updates references. This is explicitly
+not all-or-none; --json reports archived/failed for every item. The index is
+regenerated once after all item attempts.
 
 Use --dry-run (-n) to preview changes without writing anything.`,
 

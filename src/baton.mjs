@@ -1,4 +1,4 @@
-import { readFileSync, fstatSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, fstatSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { extractFrontmatter, parseSimpleFrontmatter } from './frontmatter.mjs';
 import { asString, toRepoPath, die, warn } from './util.mjs';
@@ -7,7 +7,7 @@ import { preparePromptDocument, runNew, readBodyInput } from './new.mjs';
 import { ensurePlanCompletionBeforeRelease, planHasPendingCompletion, runSet } from './lifecycle.mjs';
 import { green, dim } from './color.mjs';
 import { authorizeManagedSource } from './managed-path.mjs';
-import { assertPlanMutationAuthorized, authoritativeSessionId, listOwnedPlans } from './pickup.mjs';
+import { assertPlanMutationAuthorized, authoritativeSessionId, listOwnedPlans, readPlanOwnership } from './pickup.mjs';
 
 // `dotmd baton` is the one-command handoff: save the resume prompt AND release
 // the plan in a single atomic-ish verb. It exists because the three-step skill
@@ -40,6 +40,7 @@ function looksLikePath(arg) {
 
 export async function runBaton(argv, config, opts = {}) {
   const { dryRun } = opts;
+  const json = argv.includes('--json');
 
   let status = 'active';
   let statusFlag = false;
@@ -53,6 +54,7 @@ export async function runBaton(argv, config, opts = {}) {
     if (a === '--note' && argv[i + 1]) { note = argv[++i]; continue; }
     if ((a === '--body' || a === '--message') && argv[i + 1]) { bodyFlag = argv[++i]; continue; }
     if (a === '--force') { force = true; continue; }
+    if (a === '--json') continue;
     if (!a.startsWith('-') || a === '-' || a.startsWith('@')) { positionals.push(a); continue; }
     die(`Unknown flag for \`dotmd baton\`: ${a}`);
   }
@@ -120,6 +122,7 @@ export async function runBaton(argv, config, opts = {}) {
 
   let repoPath = null;
   let oldStatus = null;
+  let ownershipPath = null;
   if (planPath) {
     planPath = authorizeManagedSource(planPath, config, { kind: 'Baton plan source' }).path;
     repoPath = toRepoPath(planPath, config.repoRoot);
@@ -143,6 +146,7 @@ export async function runBaton(argv, config, opts = {}) {
       die('`dotmd baton --status in-session` contradicts baton release semantics. Choose active/paused/awaiting/partial/blocked.');
     }
     assertPlanMutationAuthorized(repoPath, config, { sessionId: authoritativeSessionId(), force });
+    ownershipPath = readPlanOwnership(repoPath, config)?.recordPath ?? null;
     if (!dryRun) ensurePlanCompletionBeforeRelease(repoPath, config, { testHooks: opts.testHooks });
     else if (planHasPendingCompletion(repoPath, config)) process.stderr.write(`${dim('[dry-run]')} Pending claim completion would block this release.\n`);
   } else {
@@ -157,10 +161,21 @@ export async function runBaton(argv, config, opts = {}) {
   let createdSlug = null;
   let archiveResult = null;
   let statusChanged = false;
+  let promptRepoPath = null;
+  let newResult = null;
+  const muted = [];
+  const originalStdoutWrite = process.stdout.write;
+  if (json) process.stdout.write = chunk => { muted.push(String(chunk)); return true; };
+  try {
   if (!planPath) {
     for (let n = 1; n <= 9 && !createdSlug; n++) {
       const slug = n === 1 ? slugBase : `${slugBase}-${n}`;
-      try { await runNew(['prompt', slug, '--body', body], config, { dryRun }); createdSlug = slug; }
+      try {
+        const prepared = preparePromptDocument(slug, body, config, { dryRun });
+        newResult = await runNew(['prompt', slug, '--body', body], config, { dryRun, deferIndex: true });
+        createdSlug = slug;
+        promptRepoPath = prepared.repoPath;
+      }
       catch (err) { if (!/File already exists/.test(String(err?.message))) throw err; }
     }
   } else {
@@ -173,14 +188,15 @@ export async function runBaton(argv, config, opts = {}) {
       if (note) setArgs.push('--note', note);
       try {
         if (dryRun) process.stdout.write(`${dim('[dry-run]')} Would create: ${prepared.repoPath}\n`);
-        else mkdirSync(path.dirname(prepared.filePath), { recursive: true });
         archiveResult = await runSet(setArgs, config, {
           dryRun,
           viaBaton: true,
           testHooks: opts.testHooks,
           creations: dryRun ? [] : [{ path: prepared.filePath, content: prepared.content }],
+          deferIndex: true,
         });
         createdSlug = prepared.slug;
+        promptRepoPath = prepared.repoPath;
         statusChanged = oldStatus !== status;
         if (!dryRun) {
           try { config.hooks.onNew?.({ path: prepared.repoPath, status: 'pending', title: prepared.slug, type: 'prompt' }); }
@@ -191,16 +207,43 @@ export async function runBaton(argv, config, opts = {}) {
       }
     }
   }
+  } finally {
+    if (json) process.stdout.write = originalStdoutWrite;
+  }
   if (!createdSlug) die(`Could not find a free prompt slug for ${slugBase} (tried ${slugBase}-2 … ${slugBase}-9).`);
 
-  // 3. Tell the agent exactly what to commit — and what NOT to. The prompt is
-  // session-local (often gitignored); only the plan's frontmatter change is
-  // repo state.
+  const normalizeRepoPath = candidate => {
+    if (!candidate) return null;
+    return path.isAbsolute(candidate) ? toRepoPath(candidate, config.repoRoot) : candidate;
+  };
+  const touched = (archiveResult?.touched ?? (planPath && statusChanged ? [repoPath] : [])).map(normalizeRepoPath);
+  const ownershipRepoPath = normalizeRepoPath(ownershipPath);
+  const repositoryFiles = [...new Set(touched.filter(candidate => candidate && candidate !== ownershipRepoPath && candidate !== promptRepoPath && candidate !== normalizeRepoPath(config.indexPath)))];
+  const sessionFiles = [...new Set([...(newResult?.sessionFiles ?? []), promptRepoPath, ownershipRepoPath].filter(Boolean))];
+  const deferredGeneratedFiles = [...new Set(newResult?.deferredGeneratedFiles ?? (config.indexPath ? [normalizeRepoPath(config.indexPath)] : []))];
+  const operationResult = {
+    operation: 'baton',
+    dryRun: Boolean(dryRun),
+    disposition: dryRun ? 'would-change' : 'applied',
+    wouldChange: Boolean(dryRun),
+    mode: planPath ? 'plan' : 'slug',
+    status: planPath ? { from: oldStatus, to: status, changed: statusChanged } : null,
+    repositoryFiles,
+    sessionFiles,
+    generatedFiles: [],
+    deferredGeneratedFiles,
+    prompt: promptRepoPath,
+    plan: archiveResult?.newRepoPath ?? repoPath,
+  };
+
   const prefix = dryRun ? dim('[dry-run] ') : '';
+  if (json) {
+    process.stdout.write(JSON.stringify(operationResult, null, 2) + '\n');
+    return operationResult;
+  }
   process.stderr.write(`\n${prefix}${green('✓ Baton passed')}: ${createdSlug} (the next session's hud surfaces it — nothing to paste into chat)\n`);
   if (statusChanged) {
-    const newRepoPath = archiveResult?.newRepoPath ?? null;
-    const pathspec = newRepoPath && newRepoPath !== repoPath ? `${repoPath} ${newRepoPath}` : repoPath;
+    const pathspec = operationResult.repositoryFiles.join(' ');
     let gitignored = false;
     try {
       const { isGitIgnored } = await import('./git.mjs');
@@ -209,8 +252,10 @@ export async function runBaton(argv, config, opts = {}) {
     if (gitignored) {
       process.stderr.write(dim(`${repoPath} is gitignored — no commit needed.\n`));
     } else {
-      process.stderr.write(`${prefix}Commit the plan's status change (keep the prompt OUT of the pathspec — it's session-local):\n`);
+      process.stderr.write(`${prefix}Commit the repository files (session files stay OUT of the pathspec):\n`);
       process.stderr.write(`${prefix}  git commit -m "baton: ${path.basename(planPath, '.md')} ${oldStatus} → ${status}" -- ${pathspec}\n`);
     }
   }
+  if (operationResult.deferredGeneratedFiles.length) process.stderr.write(dim(`Generated index deferred: ${operationResult.deferredGeneratedFiles.join(', ')}\n`));
+  return operationResult;
 }

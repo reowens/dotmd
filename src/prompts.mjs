@@ -1,10 +1,10 @@
-import { readFileSync, statSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { extractFrontmatter, parseSimpleFrontmatter } from './frontmatter.mjs';
 import { asString, toRepoPath, die, resolveDocPath, isArchivedPath } from './util.mjs';
 import { buildIndex, resolveDocArg } from './index.mjs';
 import { runQuery } from './query.mjs';
-import { completePlanClaim, renderLifecycleMutation, runArchive, runStatus } from './lifecycle.mjs';
+import { completePlanClaim, regenIndex, renderLifecycleMutation, runArchive, runStatus } from './lifecycle.mjs';
 import { runNew } from './new.mjs';
 import { green, dim } from './color.mjs';
 import { authorizeManagedSource } from './managed-path.mjs';
@@ -286,7 +286,6 @@ export async function consumePrompt(filePath, config, opts) {
   // hook crash, anything), the body must not have already gone to stdout —
   // otherwise `claude "$(dotmd prompts next)"` consumes the prompt without it
   // ever being archived, and the next session sees the same prompt as pending.
-  if (linkedClaim?.prepared) mkdirSync(path.dirname(linkedClaim.prepared.recordPath), { recursive: true });
   const archiveResult = runArchive([filePath], config, {
     noIndex,
     showFiles,
@@ -303,15 +302,44 @@ export async function consumePrompt(filePath, config, opts) {
   // downstream failure cannot roll the transaction back or make it consumable
   // again; the archived path remains available through `prompts show`.
   await writeConsumedBody(consumedBody, consumedPath, opts.writeBody, linkedClaim?.repoPath);
+  let completion = { indexRegenerated: false, ownershipChanged: false, hook: 'none', pending: false };
   if (linkedClaim) {
     try {
-      completePlanClaim(linkedClaim.repoPath, config, opts);
+      completion = completePlanClaim(linkedClaim.repoPath, config, opts);
+      if (!noIndex && config.indexPath && !completion.indexRegenerated) {
+        regenIndex(config, { throwOnError: true, testHooks: opts.testHooks });
+        completion.indexRegenerated = true;
+      }
     } catch (err) {
       throw new Error(`Prompt consumed and body delivered; linked claim completion remains pending for ${linkedClaim.repoPath}: ${err.message}`);
     }
     process.stderr.write(`${green('→ Claimed')}: ${linkedClaim.repoPath} (in-session)\n`);
   }
   process.stderr.write(`${green('✓ Consumed')}: ${consumedPath}\n`);
+  const ownershipRecordPath = linkedClaim?.prepared?.recordPath ?? (linkedClaim ? readPlanOwnership(linkedClaim.repoPath, config)?.recordPath : null);
+  const ownershipPath = ownershipRecordPath ? toRepoPath(ownershipRecordPath, config.repoRoot) : null;
+  const normalize = candidate => path.isAbsolute(candidate) ? toRepoPath(candidate, config.repoRoot) : candidate.split(path.sep).join('/');
+  const resultPaths = [
+    ...(linkedClaim?.planChanged ? [linkedClaim.repoPath] : []),
+    ...(archiveResult?.referencePaths ?? []),
+  ].filter(Boolean).map(normalize);
+  const ownershipResultPaths = resultPaths.filter(candidate => candidate.startsWith('.dotmd/ownership/'));
+  const repositoryFiles = [...new Set(resultPaths.filter(candidate => !candidate.startsWith('.dotmd/ownership/')))];
+  const sessionFiles = [...new Set([
+    repoPath,
+    consumedPath,
+    (linkedClaim?.prepared || completion.ownershipChanged) ? ownershipPath : null,
+    ...ownershipResultPaths,
+  ].filter(Boolean).map(normalize))];
+  return {
+    operation: 'consume',
+    status: { from: status ?? null, to: 'archived', changed: true },
+    repositoryFiles,
+    sessionFiles,
+    generatedFiles: config.indexPath && !noIndex && (completion.indexRegenerated || archiveResult?.indexRegenerated) ? [toRepoPath(config.indexPath, config.repoRoot)] : [],
+    deferredGeneratedFiles: config.indexPath && noIndex ? [toRepoPath(config.indexPath, config.repoRoot)] : [],
+    claim: linkedClaim ? { plan: linkedClaim.repoPath, changed: linkedClaim.planChanged, pendingCompletion: completion.pending, hook: completion.hook } : null,
+  };
 }
 
 export async function writeConsumedBody(body, archivedPath, write = null, linkedPlan = null) {
@@ -355,16 +383,19 @@ function prepareLinkedPromptClaim(planRef, config) {
     malformed: false,
   });
   if (!disposition.pickupable) die(`Linked plan cannot be claimed (${disposition.kind}); prompt was not consumed: ${repoPath}`);
-  if (disposition.kind === 'resume') return { planPath, repoPath, prepared: null };
+  if (disposition.kind === 'resume') return { planPath, repoPath, prepared: null, planChanged: false, disposition: disposition.kind };
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
   const rendered = disposition.kind === 'start'
     ? renderLifecycleMutation(raw, { status: 'in-session', updated: now }, `Started (${oldStatus} → in-session).`, { createSection: true })
     : null;
+  const prepared = preparePlanClaim({ filePath: planPath, sourceContent: raw, renderedContent: rendered,
+    ownership, sessionId, now, config });
   return {
     planPath,
     repoPath,
-    prepared: preparePlanClaim({ filePath: planPath, sourceContent: raw, renderedContent: rendered,
-      ownership, sessionId, now, config }),
+    prepared,
+    planChanged: prepared.updates.some(item => path.resolve(item.path) === path.resolve(planPath)),
+    disposition: disposition.kind,
   };
 }
 

@@ -28,8 +28,8 @@ runlist:
   - ../archived/dotmd-primary-consumer-hardening-03-managed-path-containment.md
   - ../archived/dotmd-primary-consumer-hardening-04-atomic-mutation.md
   - ../archived/dotmd-primary-consumer-hardening-05-lifecycle-ownership.md
-  - dotmd-primary-consumer-hardening-06-transactional-moves.md
-  - dotmd-primary-consumer-hardening-12-path-identity-outputs.md
+  - ../archived/dotmd-primary-consumer-hardening-06-transactional-moves.md
+  - ../archived/dotmd-primary-consumer-hardening-12-path-identity-outputs.md
   - dotmd-primary-consumer-hardening-08-command-agent-contracts.md
   - dotmd-primary-consumer-hardening-13-agent-context-v1.md
   - dotmd-primary-consumer-hardening-14-bounded-git-metadata.md
@@ -98,8 +98,8 @@ Fixing findings independently would duplicate logic and preserve the underlying 
 5. [Managed Path Containment](../archived/dotmd-primary-consumer-hardening-03-managed-path-containment.md) ⬜
 6. [Atomic Mutation](../archived/dotmd-primary-consumer-hardening-04-atomic-mutation.md) ⬜
 7. [Lifecycle Ownership](../archived/dotmd-primary-consumer-hardening-05-lifecycle-ownership.md) ⬜
-8. [Transactional Moves](dotmd-primary-consumer-hardening-06-transactional-moves.md) ⬜
-9. [Path Identity Outputs](dotmd-primary-consumer-hardening-12-path-identity-outputs.md) ⬜
+8. [Transactional Moves](../archived/dotmd-primary-consumer-hardening-06-transactional-moves.md) ⬜
+9. [Path Identity Outputs](../archived/dotmd-primary-consumer-hardening-12-path-identity-outputs.md) ⬜
 10. [Command Schema Contracts](dotmd-primary-consumer-hardening-08-command-agent-contracts.md) ⬜
 11. [Agent Context V1](dotmd-primary-consumer-hardening-13-agent-context-v1.md) ⬜
 12. [Bounded Git Metadata](dotmd-primary-consumer-hardening-14-bounded-git-metadata.md) ⬜

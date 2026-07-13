@@ -48,7 +48,7 @@ const COMMAND_FLAGS = {
             '--json', '--status', '--include-archived', '--sort', '--limit', '--all'],
   use: [],
   next: [],
-  baton: ['--status', '--note', '--body', '--message', '--dry-run'],
+  baton: ['--status', '--note', '--body', '--message', '--json', '--dry-run'],
   set: [],
   status: [],
   archive: ['--note', '--no-index', '--show-files', '--closeout-template'],

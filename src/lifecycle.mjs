@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { extractFrontmatter, parseSimpleFrontmatter, normalizeEol } from './frontmatter.mjs';
-import { asString, toRepoPath, die, warn, resolveDocPath, resolveRefPath, escapeRegex, nowIso, suggestCandidates, emitFilesFooter, isArchivedPath, currentSessionId } from './util.mjs';
+import { asString, toRepoPath, die, warn, resolveDocPath, escapeRegex, nowIso, suggestCandidates, emitFilesFooter, isArchivedPath, currentSessionId } from './util.mjs';
 import { readJournalEntries } from './journal.mjs';
-import { captureGitIndexPaths, getGitLastModifiedBatch, isTracked, restoreGitIndexPaths, stageMovePaths } from './git.mjs';
+import { captureGitIndexGeneration, getGitLastModifiedBatch, isTracked } from './git.mjs';
 import { buildIndex, collectDocFiles, resolveDocArg } from './index.mjs';
 import { writeRenderedIndex } from './index-file.mjs';
 import { green, dim } from './color.mjs';
@@ -12,6 +12,7 @@ import { buildCard, renderCard } from './pickup-card.mjs';
 import { walkSections, findSection } from './section.mjs';
 import { authorizeManagedDestination, authorizeManagedSource, authorizeManagedSweep } from './managed-path.mjs';
 import { withPathLocks, snapshotFile, replaceSnapshot, moveFileAtomic, mutateFile, mutateFileSet } from './atomic-mutation.mjs';
+import { configuredReferenceFields, createReferenceIdentitySet, rewriteDocumentReferences } from './reference-planner.mjs';
 import {
   assertPlanMutationAuthorized,
   assertHookDeliveryTakeoverSafe,
@@ -77,25 +78,34 @@ function commitLifecycleMutation(filePath, targetPath, config, updates, historyF
   if (targetPath) {
     let result;
     const tracked = isTracked(filePath, config.repoRoot);
-    const gitIndex = tracked ? captureGitIndexPaths([filePath, targetPath], config.repoRoot) : null;
+    const gitIndex = tracked ? captureGitIndexGeneration(config.repoRoot) : null;
     const companionPaths = new Set((options.additionalUpdates ?? []).map(item => path.resolve(item.path)));
     const allFiles = collectDocFiles(config).filter(candidate => candidate !== filePath && candidate !== targetPath && !companionPaths.has(path.resolve(candidate)));
     authorizeManagedSweep(allFiles, config, { kind: 'Reference rewrite source' });
+    const identities = createReferenceIdentitySet([filePath, ...allFiles]);
+    const referenceFields = configuredReferenceFields(config);
     const moveResult = moveFileAtomic(filePath, targetPath, sourceContent => {
       result = render(sourceContent);
       return result.content;
     }, {
       repoRoot: config.repoRoot,
+      config,
       updates: [...allFiles.map(docFile => ({
         path: docFile,
-        render: raw => renderInboundRefs(raw, docFile, filePath, targetPath, config),
+        render: raw => rewriteDocumentReferences(raw, {
+          sourcePath: docFile, repoRoot: config.repoRoot, identities, oldPath: filePath, newPath: targetPath, referenceFields,
+        }),
       })), ...(options.additionalUpdates ?? []).map(item => ({
         ...item,
-        content: item.content === undefined ? undefined : renderInboundRefs(item.content, item.path, filePath, targetPath, config),
+        content: item.content === undefined ? undefined : rewriteDocumentReferences(item.content, {
+          sourcePath: item.path, repoRoot: config.repoRoot, identities, oldPath: filePath, newPath: targetPath, referenceFields,
+        }),
       }))],
       creations: options.creations ?? [],
-      finalize: tracked ? () => stageMovePaths(filePath, targetPath, config.repoRoot) : null,
-      rollbackFinalize: tracked ? () => restoreGitIndexPaths(gitIndex, config.repoRoot) : null,
+      gitMove: tracked,
+      gitIndex,
+      operation: 'lifecycle-move',
+      sessionId: availableSessionId(),
       testHooks: options.testHooks,
     });
     return { ...result, sourceContent: moveResult.source.content, updatedPaths: moveResult.updatedPaths };
@@ -168,7 +178,7 @@ function archiveBaseFor(filePath, fileRoot, docType, config) {
 // in try/catch — a regen failure shouldn't undo the successful mutation,
 // only warn with the recovery command.
 export function regenIndex(config, options = {}) {
-  if (!config.indexPath) return;
+  if (!config.indexPath) return false;
   try {
     // Fast path: skip validation/git-staleness/ref-checking — the rendered
     // index file only consumes status/title/snapshot/etc. Validation runs on
@@ -176,19 +186,25 @@ export function regenIndex(config, options = {}) {
     // snappy on repos with huge git history or heavy `validate` hooks.
     options.testHooks?.beforeClaimIndex?.();
     writeRenderedIndex(() => buildIndex(config, { fast: true }), config, { testHooks: options.testHooks });
+    return true;
   } catch (err) {
     if (options.throwOnError) throw err;
     warn(`Could not regenerate index (run \`dotmd index\`): ${err.message}`);
+    return false;
   }
 }
 
 function reconcileClaimOperation(repoPath, config, opts = {}) {
   let current = validatedClaimOperation(repoPath, config);
-  if (!current) return;
+  if (!current) return { indexRegenerated: false, ownershipChanged: false, hook: 'none', pending: false };
+  let indexRegenerated = false;
+  let ownershipChanged = false;
   const binding = current.binding;
   if (current.operation.index === 'pending') {
     regenIndex(config, { throwOnError: true, testHooks: opts.testHooks });
+    indexRegenerated = true;
     updateOwnershipOperation(repoPath, config, binding, op => { op.index = 'done'; });
+    ownershipChanged = true;
     current = validatedClaimOperation(repoPath, config, binding);
     if (!current) throw new Error(`Claim completion was superseded for ${repoPath}.`);
   }
@@ -200,7 +216,7 @@ function reconcileClaimOperation(repoPath, config, opts = {}) {
         delete op.hookDeliveryStartedAt;
         delete op.hookDeliveryOwner;
       });
-      return;
+      return { indexRegenerated, ownershipChanged: true, hook: 'skipped', pending: false };
     }
     // Durable outbox contract: retries reuse operationId until the hook returns.
     // Hooks that perform external side effects must deduplicate by operationId.
@@ -212,11 +228,11 @@ function reconcileClaimOperation(repoPath, config, opts = {}) {
       leaseMs: opts.hookLeaseMs,
       ownerLiveness: opts.hookOwnerLiveness,
     });
-    if (!lease) return;
+    if (!lease) return { indexRegenerated, ownershipChanged, hook: current.operation.hook, pending: true };
     if (lease.busy) throw new Error(`Claim hook delivery is already in progress for ${repoPath}.`);
     if (!config.hooks.onPickup) {
       skipClaimHookDelivery(repoPath, config, binding, lease.token);
-      return;
+      return { indexRegenerated, ownershipChanged: true, hook: 'skipped', pending: false };
     }
     try {
       const operation = lease.operation;
@@ -227,13 +243,22 @@ function reconcileClaimOperation(repoPath, config, opts = {}) {
       throw err;
     }
     finishClaimHookDelivery(repoPath, config, binding, lease.token);
+    ownershipChanged = true;
   }
+  const after = validatedClaimOperation(repoPath, config, binding);
+  return { indexRegenerated, ownershipChanged, hook: after?.operation?.hook ?? 'done', pending: Boolean(after && (after.operation.index === 'pending' || ['pending', 'delivering'].includes(after.operation.hook))) };
 }
 
 export function completePlanClaim(repoPath, config, opts = {}) {
   const current = validatedClaimOperation(repoPath, config);
-  if (opts.noIndex && current) updateOwnershipOperation(repoPath, config, current.binding, op => { op.index = 'skipped'; });
-  return reconcileClaimOperation(repoPath, config, opts);
+  let skipped = false;
+  if (opts.noIndex && current) {
+    updateOwnershipOperation(repoPath, config, current.binding, op => { op.index = 'skipped'; });
+    skipped = true;
+  }
+  const result = reconcileClaimOperation(repoPath, config, opts);
+  if (skipped) result.ownershipChanged = true;
+  return result;
 }
 
 export function ensurePlanCompletionBeforeRelease(repoPath, config, opts = {}) {
@@ -472,7 +497,6 @@ export async function runStatus(argv, config, opts = {}) {
     return;
   }
 
-  if (targetDir) mkdirSync(targetDir, { recursive: true });
   const mutationResult = commitLifecycleMutation(filePath, targetPath, config, { status: newStatus, updated: today }, currentOld => {
     const currentTransition = `Status: ${currentOld} → ${newStatus}`;
     return note ? `${currentTransition} — ${note}` : `${currentTransition}.`;
@@ -500,7 +524,7 @@ export async function runStatus(argv, config, opts = {}) {
   // each other's uncommitted index changes into the staging area.
   if (noIndex) {
     process.stderr.write(dim('(index not regenerated — run `dotmd index` to refresh)\n'));
-  } else {
+  } else if (!opts.deferIndex) {
     regenIndex(config);
   }
 
@@ -512,7 +536,7 @@ export async function runStatus(argv, config, opts = {}) {
     const touched = [filePath];
     if (finalPath !== filePath) touched.push(finalPath);
     touched.push(...inboundRefPaths);
-    if (config.indexPath && !noIndex) touched.push(config.indexPath);
+    if (config.indexPath && !noIndex && !opts.deferIndex) touched.push(config.indexPath);
     emitFilesFooter(touched, config);
   }
 
@@ -520,6 +544,12 @@ export async function runStatus(argv, config, opts = {}) {
     oldPath: toRepoPath(filePath, config.repoRoot),
     newPath: toRepoPath(finalPath, config.repoRoot),
   }); } catch (err) { warn(`Hook 'onStatusChange' threw: ${err.message}`); }
+  return {
+    action: 'status-changed',
+    oldRepoPath: toRepoPath(filePath, config.repoRoot),
+    newRepoPath: toRepoPath(finalPath, config.repoRoot),
+    touched: [toRepoPath(filePath, config.repoRoot), ...(finalPath !== filePath ? [toRepoPath(finalPath, config.repoRoot)] : []), ...inboundRefPaths.map(item => toRepoPath(item, config.repoRoot))],
+  };
 }
 
 // Atomically claim a plan for this session, then reconcile its generated index
@@ -650,7 +680,7 @@ export async function startPlan(argv, config, opts = {}) {
 
   if (showFiles && disposition.kind === 'start') {
     const touched = [filePath];
-    if (config.indexPath && !noIndex) touched.push(config.indexPath);
+    if (config.indexPath && !noIndex && !opts.deferIndex) touched.push(config.indexPath);
     emitFilesFooter(touched, config);
   }
 
@@ -742,7 +772,7 @@ export function runArchive(argv, config, opts = {}) {
     if (!noIndex && !opts.deferIndex) regenIndex(config);
     out.write(`${green('✓ Healed')}: ${repoPathHeal} (${oldStatus} → ${targetStatus}; file already under \`${config.archiveDir}/\`)\n`);
     const touched = [repoPathHeal];
-    if (config.indexPath && !noIndex) touched.push(config.indexPath);
+    if (config.indexPath && !noIndex && !opts.deferIndex) touched.push(config.indexPath);
     if (showFiles) emitFilesFooter(touched, config);
     return {
       action: 'healed',
@@ -778,7 +808,7 @@ export function runArchive(argv, config, opts = {}) {
       out.write(`${prefix} Would append Version History: - **${today}** Archived — ${note}\n`);
     }
     out.write(`${prefix} Would move: ${oldRepoPath} → ${newRepoPath}\n`);
-    if (config.indexPath && !noIndex) out.write(`${prefix} Would regenerate index\n`);
+    if (config.indexPath && !noIndex && !opts.deferIndex) out.write(`${prefix} Would regenerate index\n`);
     if (config.indexPath && noIndex) out.write(`${prefix} Would skip index regen (--no-index)\n`);
 
     // Preview reference updates
@@ -794,7 +824,6 @@ export function runArchive(argv, config, opts = {}) {
     return;
   }
 
-  mkdirSync(targetDir, { recursive: true });
   const mutationResult = commitLifecycleMutation(filePath, targetPath, config, { status: targetStatus, updated: today },
     () => note ? `Archived — ${note}` : 'Archived.', {
       createSection: Boolean(note),
@@ -811,7 +840,7 @@ export function runArchive(argv, config, opts = {}) {
   const refTouchedPaths = mutationResult.updatedPaths;
   const updatedRefCount = refTouchedPaths.length;
 
-  if (!noIndex && !opts.deferIndex) regenIndex(config);
+  const indexRegenerated = !noIndex && !opts.deferIndex ? regenIndex(config) : false;
 
   out.write(`${green('Archived')}: ${oldRepoPath} → ${newRepoPath}\n`);
   if (committedCloseoutAction?.action === 'inject') {
@@ -821,11 +850,11 @@ export function runArchive(argv, config, opts = {}) {
   }
   if (selfRefsFixed) out.write('Updated references in archived file.\n');
   if (updatedRefCount > 0) out.write(`Updated references in ${updatedRefCount} file(s).\n`);
-  if (config.indexPath && !noIndex && !opts.deferIndex) out.write('Index regenerated.\n');
+  if (config.indexPath && indexRegenerated) out.write('Index regenerated.\n');
   if (config.indexPath && noIndex) out.write(dim('(index not regenerated — run `dotmd index` to refresh)\n'));
 
   const touched = [oldRepoPath, newRepoPath, ...refTouchedPaths];
-  if (config.indexPath && !noIndex) touched.push(config.indexPath);
+  if (config.indexPath && indexRegenerated) touched.push(config.indexPath);
   if (showFiles) emitFilesFooter(touched, config);
 
   try { config.hooks.onArchive?.({ path: newRepoPath, oldStatus }, { oldPath: oldRepoPath, newPath: newRepoPath }); } catch (err) { warn(`Hook 'onArchive' threw: ${err.message}`); }
@@ -835,6 +864,8 @@ export function runArchive(argv, config, opts = {}) {
     oldRepoPath,
     newRepoPath,
     touched,
+    referencePaths: refTouchedPaths.map(item => toRepoPath(item, config.repoRoot)),
+    indexRegenerated,
     consumedBody: extractFrontmatter(mutationResult.sourceContent).body,
     consumedFrontmatter: parseSimpleFrontmatter(extractFrontmatter(mutationResult.sourceContent).frontmatter),
   };
@@ -936,7 +967,7 @@ export async function runSet(argv, config, opts = {}) {
     // `done` (with archive:true) rather than `archived`. Without this, runArchive
     // would silently rewrite it to `archived`.
     return runArchive(archiveArgs, config, {
-      dryRun, note, archiveStatus: newStatus, force, testHooks: opts.testHooks,
+      dryRun, note, archiveStatus: newStatus, force, testHooks: opts.testHooks, deferIndex: opts.deferIndex,
       additionalUpdates: opts.additionalUpdates,
       creations: opts.creations,
     });
@@ -986,13 +1017,14 @@ export async function runSet(argv, config, opts = {}) {
   const releaseUpdate = releasing
     ? prepareOwnershipRelease(repoPath, config, { sessionId, force })
     : null;
-  await runStatus(statusArgs, config, {
+  const result = await runStatus(statusArgs, config, {
     dryRun,
     suppressDeprecation: true,
     note,
     additionalUpdates: releaseUpdate ? [releaseUpdate] : [],
     creations: opts.creations,
     testHooks: opts.testHooks,
+    deferIndex: opts.deferIndex,
   });
 
   if (!dryRun) {
@@ -1003,10 +1035,12 @@ export async function runSet(argv, config, opts = {}) {
       warn(`wrapping up? leave a baton so the next session picks up cleanly — \`dotmd baton ${path.basename(filePath, '.md')} @draft\` saves a resume prompt (no copy-paste into chat).`);
     }
   }
+  return result;
 }
 
 export function runBulkArchive(argv, config, opts = {}) {
   const { dryRun } = opts;
+  const json = argv.includes('--json');
   const noIndex = argv.includes('--no-index') || opts.noIndex;
   const showFiles = argv.includes('--show-files') || opts.showFiles;
   const inputs = argv.filter(a => !a.startsWith('-'));
@@ -1030,33 +1064,46 @@ export function runBulkArchive(argv, config, opts = {}) {
   if (unique.length === 0) die('No matching files found (already-archived files are excluded).');
   authorizeManagedSweep(unique, config, { kind: 'Bulk archive source' });
 
-  process.stdout.write(`${unique.length} file(s) to archive:\n`);
-  for (const f of unique) {
-    process.stdout.write(`  ${toRepoPath(f, config.repoRoot)}\n`);
+  if (!json) {
+    process.stdout.write(`${unique.length} file(s) to archive (independent per-item transactions):\n`);
+    for (const f of unique) process.stdout.write(`  ${toRepoPath(f, config.repoRoot)}\n`);
   }
 
   if (dryRun) {
-    process.stdout.write(dim('\n[dry-run] No changes made.\n'));
-    return;
+    const result = { operation: 'bulk-archive', atomicity: 'per-item', dryRun: true, items: unique.map(file => ({ path: toRepoPath(file, config.repoRoot), result: 'would-archive' })) };
+    if (json) process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    else process.stdout.write(dim('\n[dry-run] No changes made.\n'));
+    return result;
   }
 
-  process.stdout.write('\n');
+  if (!json) process.stdout.write('\n');
   // Bulk archives always defer index regen to the end — N individual regens
   // is wasteful and the final state is the same. `--no-index` skips even
   // the final one.
   const bulkTouched = [];
+  const items = [];
+  let indexRegenerated = false;
+  let indexError = null;
+  let succeeded = 0;
+  const originalStdoutWrite = process.stdout.write;
+  if (json) process.stdout.write = () => true;
+  try {
   for (const f of unique) {
     const relPath = toRepoPath(f, config.repoRoot);
     try {
       const result = runArchive([relPath], config, { ...opts, noIndex: true, showFiles: false });
       if (result?.touched) bulkTouched.push(...result.touched);
+      items.push({ path: relPath, result: 'archived', newPath: result?.newRepoPath ?? null, repositoryFiles: result?.touched ?? [] });
     } catch (err) {
-      warn(`Failed to archive ${relPath}: ${err.message}`);
+      items.push({ path: relPath, result: 'failed', error: err.message });
+      if (!json) warn(`Failed to archive ${relPath}: ${err.message}`);
     }
   }
-  if (!noIndex) {
-    regenIndex(config);
-    if (config.indexPath) process.stdout.write('Index regenerated.\n');
+  succeeded = items.filter(item => item.result === 'archived').length;
+  if (!noIndex && succeeded > 0) {
+    try { indexRegenerated = regenIndex(config, { throwOnError: true, testHooks: opts.testHooks }); }
+    catch (err) { indexError = err.message; }
+    if (config.indexPath && indexRegenerated) process.stdout.write('Index regenerated.\n');
   } else if (config.indexPath) {
     process.stdout.write(dim('(index not regenerated — run `dotmd index` to refresh)\n'));
   }
@@ -1065,6 +1112,25 @@ export function runBulkArchive(argv, config, opts = {}) {
     if (config.indexPath && !noIndex) all.push(config.indexPath);
     emitFilesFooter(all, config);
   }
+  } finally {
+    if (json) process.stdout.write = originalStdoutWrite;
+  }
+  const normalize = item => path.isAbsolute(item) ? toRepoPath(item, config.repoRoot) : item.split(path.sep).join('/');
+  for (const item of items) if (item.repositoryFiles) item.repositoryFiles = [...new Set(item.repositoryFiles.map(normalize))];
+  const deferredGeneratedFiles = config.indexPath && succeeded > 0 && (noIndex || indexError) ? [toRepoPath(config.indexPath, config.repoRoot)] : [];
+  const result = {
+    operation: 'bulk-archive', atomicity: 'per-item', items,
+    repositoryFiles: [...new Set(bulkTouched.map(normalize))],
+    generatedFiles: config.indexPath && indexRegenerated ? [toRepoPath(config.indexPath, config.repoRoot)] : [],
+    deferredGeneratedFiles,
+    index: !config.indexPath ? { status: 'not-configured' }
+      : indexRegenerated ? { status: 'generated', path: toRepoPath(config.indexPath, config.repoRoot) }
+        : indexError ? { status: 'failed', path: toRepoPath(config.indexPath, config.repoRoot), error: indexError }
+          : { status: noIndex ? 'deferred' : 'skipped', path: toRepoPath(config.indexPath, config.repoRoot) },
+  };
+  if (json) process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  if (items.some(item => item.result === 'failed') || indexError) process.exitCode = 1;
+  return result;
 }
 
 export function runTouch(argv, config, opts = {}) {
@@ -1158,110 +1224,30 @@ export function runTouch(argv, config, opts = {}) {
 // `docs/plans/../archived/child.md`; and could corrupt a `grandchild.md` ref
 // when archiving `child.md` (suffix match). oldPath no longer exists on disk
 // post-`git mv`, so existsSync-based resolveRefPath can't be used here.
-function rewriteFrontmatterRefs(fm, docDir, oldPath, newPath, repoRoot) {
-  // Exclude [ ] , from the token so flow-array elements (`refs: [a.md, b.md]`)
-  // match individually rather than swallowing the bracket and failing to resolve.
-  return fm.replace(/[^\s"'<>:[\],]+\.md\b/g, (token) => {
-    const docRelAbs = path.resolve(docDir, token);
-    const repoRelAbs = path.resolve(repoRoot, token);
-    if (docRelAbs !== oldPath && repoRelAbs !== oldPath) return token;
-    return path.relative(docDir, newPath).split(path.sep).join('/');
-  });
-}
-
-/**
- * After a file moves (archive/unarchive), update frontmatter references in all
- * docs that pointed to the old location so they point to the new one.
- */
-function renderInboundRefs(raw, docFile, oldPath, newPath, config) {
-  const basename = path.basename(oldPath);
-  if (!raw.includes(basename)) return raw;
-  const { frontmatter: fm, body } = extractFrontmatter(raw);
-  if (!fm) return raw;
-  const docDir = path.dirname(docFile);
-  const newFm = rewriteFrontmatterRefs(fm, docDir, oldPath, newPath, config.repoRoot);
-  const linkRegex = /(\[[^\]]*\]\()([^)#]+\.md)(#[^)]*)?(\))/g;
-  const newBody = body.replace(linkRegex, (match, pre, href, frag, post) => {
-    if (/^https?:/i.test(href)) return match;
-    const docRelAbs = path.resolve(docDir, href);
-    const repoRelAbs = path.resolve(config.repoRoot, href);
-    if (docRelAbs !== oldPath && repoRelAbs !== oldPath) return match;
-    const newHref = path.relative(docDir, newPath).split(path.sep).join('/');
-    return `${pre}${newHref}${frag ?? ''}${post}`;
-  });
-  return newFm === fm && newBody === body ? raw : `---\n${newFm}\n---\n${newBody}`;
-}
-
 function renderMovedFileRefs(raw, oldPath, newPath, config) {
-  const oldDir = path.dirname(oldPath);
-  const newDir = path.dirname(newPath);
-  if (oldDir === newDir) return raw;
-  const { frontmatter, body } = extractFrontmatter(raw);
-
-  // Fix frontmatter ref fields (YAML list items like  - ./path.md).
-  // Resolve doc-relative first, then repo-root-relative — so a ref like
-  // `docs/foo/bar.md` written from any nesting level gets rewritten correctly
-  // when the source moves. Without the repo-root fallback, repo-relative refs
-  // silently skipped rewriting (existsSync on the doubled doc-relative path
-  // returned false).
-  // Token-based: rewrite every `*.md` path that resolved to a real file from
-  // the old location, regardless of YAML shape — block-sequence list items
-  // (`  - ./path.md`), inline scalars (`parent_plan: hub.md`), and flow arrays
-  // (`related_plans: [a.md, b.md]`). Quotes sit outside the matched token, so
-  // `"./path.md"` rewrites in place. Mirrors rewriteFrontmatterRefs (inbound).
-  let newFm = frontmatter;
-  newFm = newFm.replace(/[^\s"'<>:[\],]+\.md\b/g, (token) => {
-    const absTarget = resolveRefPath(token, oldDir, config.repoRoot);
-    if (!absTarget) return token;
-    return path.relative(newDir, absTarget).split(path.sep).join('/');
+  const files = collectDocFiles(config);
+  return rewriteDocumentReferences(raw, {
+    sourcePath: oldPath,
+    outputPath: newPath,
+    repoRoot: config.repoRoot,
+    identities: createReferenceIdentitySet(files),
+    referenceFields: configuredReferenceFields(config),
+    oldPath,
+    newPath,
+    rebaseAll: true,
   });
-
-  // Fix body markdown links [text](path.md) and [text](path.md#anchor) — the
-  // trailing fragment is preserved across the rewrite.
-  let newBody = body;
-  const linkRegex = /(\[[^\]]*\]\()([^)#]+\.md)(#[^)]*)?(\))/g;
-  newBody = newBody.replace(linkRegex, (match, pre, href, frag, post) => {
-    if (/^https?:/i.test(href)) return match;
-    const absTarget = resolveRefPath(href, oldDir, config.repoRoot);
-    if (!absTarget) return match;
-    const newHref = path.relative(newDir, absTarget).split(path.sep).join('/');
-    return `${pre}${newHref}${frag ?? ''}${post}`;
-  });
-
-  return newFm !== frontmatter || newBody !== body ? `---\n${newFm}\n---\n${newBody}` : raw;
 }
 
 function countRefsToUpdate(oldPath, newPath, config) {
-  const basename = path.basename(oldPath);
   const allFiles = collectDocFiles(config);
-  let count = 0;
-
-  for (const docFile of allFiles) {
-    if (docFile === newPath) continue;
+  const identities = createReferenceIdentitySet(allFiles);
+  return allFiles.filter(docFile => {
+    if (docFile === oldPath || docFile === newPath) return false;
     const raw = readFileSync(docFile, 'utf8');
-    if (!raw.includes(basename)) continue;
-    const { frontmatter: fm, body } = extractFrontmatter(raw);
-    if (!fm) continue;
-
-    const docDir = path.dirname(docFile);
-    const fmHit = rewriteFrontmatterRefs(fm, docDir, oldPath, newPath, config.repoRoot) !== fm;
-
-    let bodyHit = false;
-    if (!fmHit) {
-      const linkRegex = /\[[^\]]*\]\(([^)#]+\.md)(?:#[^)]*)?\)/g;
-      for (const match of body.matchAll(linkRegex)) {
-        const href = match[1];
-        if (/^https?:/i.test(href)) continue;
-        const docRelAbs = path.resolve(docDir, href);
-        const repoRelAbs = path.resolve(config.repoRoot, href);
-        if (docRelAbs === oldPath || repoRelAbs === oldPath) { bodyHit = true; break; }
-      }
-    }
-
-    if (fmHit || bodyHit) count++;
-  }
-
-  return count;
+    return rewriteDocumentReferences(raw, {
+      sourcePath: docFile, repoRoot: config.repoRoot, identities, oldPath, newPath, referenceFields: configuredReferenceFields(config),
+    }) !== raw;
+  }).length;
 }
 
 // Append a one-line dated bullet to the file's `## Version History` section.

@@ -179,6 +179,24 @@ describe('multi-root: graph', () => {
     ok(graph.edges.some(e => e.source.includes('plans') && e.target.includes('modules')),
       'has cross-root edge');
   });
+
+  it('keeps equal root-relative HTML and DOT identities distinct', () => {
+    setupMultiRoot();
+    writeFileSync(path.join(tmpDir, 'docs', 'plans', 'same.md'), '---\nstatus: active\n---\n# Plan Same\n');
+    writeFileSync(path.join(tmpDir, 'docs', 'modules', 'same.md'), '---\nstatus: active\n---\n# Module Same\n');
+
+    const outDir = path.join(tmpDir, 'site');
+    const html = run(['export', '--format', 'html', '--output', outDir]);
+    strictEqual(html.status, 0, `stderr: ${html.stderr}`);
+    const fallbackFiles = readFileSync(path.join(outDir, 'index.html'), 'utf8').match(/__dotmd\/[a-f0-9]{64}\.html/g) ?? [];
+    strictEqual(new Set(fallbackFiles).size, 2, 'allocates distinct stable pages');
+    for (const href of fallbackFiles) ok(existsSync(path.join(outDir, ...href.split('/'))), `emits ${href}`);
+
+    const dot = run(['graph', '--dot']);
+    strictEqual(dot.status, 0, `stderr: ${dot.stderr}`);
+    ok(dot.stdout.includes('"docs/plans/same.md"'));
+    ok(dot.stdout.includes('"docs/modules/same.md"'));
+  });
 });
 
 describe('multi-root: backwards compat', () => {

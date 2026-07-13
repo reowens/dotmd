@@ -389,16 +389,18 @@ describe('durable lifecycle ownership', () => {
     match(readFileSync(file, 'utf8'), /Started \(active → in-session\) — starting focused pass/);
   });
 
-  it('owned plans cannot be renamed by either the owner or another session', () => {
+  it('same-session rename migrates ownership while another session remains rejected', () => {
     setup();
     const file = plan('rename-owned');
     strictEqual(run(['use', file], 'A').status, 0);
-    for (const sid of ['A', 'B']) {
-      const result = run(['rename', file, 'renamed'], sid);
-      ok(result.status !== 0);
-      match(result.stderr, /Cannot rename an owned plan/);
-    }
-    ok(existsSync(file));
+    const owned = run(['rename', file, 'renamed'], 'A');
+    strictEqual(owned.status, 0, owned.stderr);
+    const renamed = path.join(path.dirname(file), 'renamed.md');
+    strictEqual(JSON.parse(readFileSync(ownershipFile(), 'utf8')).plan, 'docs/plans/renamed.md');
+    const other = run(['rename', renamed, 'forbidden'], 'B');
+    ok(other.status !== 0);
+    match(other.stderr, /another session/);
+    ok(existsSync(renamed));
   });
 
   it('busy linked prompt remains pending and byte-identical', () => {
