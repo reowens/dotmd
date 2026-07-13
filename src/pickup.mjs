@@ -85,15 +85,21 @@ function ownershipRoot(config) {
 
 export function canonicalPlanIdentity(filePath, config) {
   const authorized = authorizeManagedSource(filePath, config, { kind: 'Ownership plan source' });
-  const resolved = canonicalizePathEntrySpelling(realpathSync(authorized.path));
+  const resolved = process.platform === 'win32'
+    ? path.join(realpathSync(path.dirname(authorized.path)), path.basename(authorized.path))
+    : canonicalizePathEntrySpelling(realpathSync(authorized.path));
   const canonicalPath = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
-  const displayRoot = canonicalizePathEntrySpelling(authorized.root.lexicalPath);
-  const managedDisplayPath = canonicalizePathEntrySpelling(authorized.path);
-  const displayRelative = path.relative(displayRoot, managedDisplayPath);
+  let repoPath = path.relative(config.repoRoot, authorized.path);
+  if (process.platform === 'win32') repoPath = repoPath.toLowerCase();
+  else {
+    const displayRoot = canonicalizePathEntrySpelling(authorized.root.lexicalPath);
+    const managedDisplayPath = canonicalizePathEntrySpelling(authorized.path);
+    repoPath = path.relative(config.repoRoot, path.join(authorized.root.lexicalPath, path.relative(displayRoot, managedDisplayPath)));
+  }
   return {
     canonicalPath,
     key: createHash('sha256').update(canonicalPath).digest('hex'),
-    repoPath: path.relative(config.repoRoot, path.join(authorized.root.lexicalPath, displayRelative)).split(path.sep).join('/'),
+    repoPath: repoPath.split(path.sep).join('/'),
     managedPath: authorized.path,
   };
 }
@@ -111,7 +117,10 @@ export function plannedPlanIdentity(filePath, config) {
   return {
     canonicalPath,
     key: createHash('sha256').update(canonicalPath).digest('hex'),
-    repoPath: path.relative(config.repoRoot, absolute).split(path.sep).join('/'),
+    repoPath: (process.platform === 'win32'
+      ? path.relative(config.repoRoot, absolute).toLowerCase()
+      : path.relative(config.repoRoot, absolute))
+      .split(path.sep).join('/'),
     managedPath: absolute,
   };
 }

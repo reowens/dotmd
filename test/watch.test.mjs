@@ -56,12 +56,10 @@ describe('watch command', () => {
       child.stderr.on('data', (d) => { stderr += d.toString(); });
 
       // Give it enough time to run the initial command
-      setTimeout(() => {
-        child.kill('SIGTERM');
-        resolve({ stdout, stderr });
-      }, 2000);
+      setTimeout(() => child.kill('SIGTERM'), 2000);
 
       child.on('error', reject);
+      child.on('close', () => resolve({ stdout, stderr }));
     });
 
     // The initial run should have produced list output
