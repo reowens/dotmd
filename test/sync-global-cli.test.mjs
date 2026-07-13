@@ -34,7 +34,7 @@ test('prefixForDotmd derives the owning global prefix', () => {
   assert.equal(prefixForDotmd('/Users/me/.nvm/versions/node/v22/bin/dotmd'), '/Users/me/.nvm/versions/node/v22');
 });
 
-test('isNpmManagedGlobalPath rejects a tool-manager shim outside npm prefix', () => {
+test('isNpmManagedGlobalPath rejects a tool-manager shim outside npm prefix', { skip: process.platform === 'win32' && 'POSIX global-install layout' }, () => {
   assert.equal(isNpmManagedGlobalPath(
     '/opt/homebrew/bin/dotmd',
     '/opt/homebrew',

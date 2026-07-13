@@ -1,9 +1,9 @@
-import { readFileSync, fstatSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { extractFrontmatter, parseSimpleFrontmatter } from './frontmatter.mjs';
 import { asString, toRepoPath, die, warn } from './util.mjs';
 import { buildIndex, resolveDocArg } from './index.mjs';
-import { preparePromptDocument, runNew, readBodyInput } from './new.mjs';
+import { preparePromptDocument, runNew, readBodyInput, readPipedBodyInput } from './new.mjs';
 import { ensurePlanCompletionBeforeRelease, planHasPendingCompletion, runSet } from './lifecycle.mjs';
 import { green, dim } from './color.mjs';
 import { authorizeManagedSource } from './managed-path.mjs';
@@ -74,13 +74,7 @@ export async function runBaton(argv, config, opts = {}) {
   else if (bodyArg !== null) body = readBodyInput(bodyArg);
   else {
     // Auto-consume piped/redirected stdin, same probe as `dotmd new`.
-    try {
-      const stat = fstatSync(0);
-      if (stat.isFIFO() || stat.isFile() || stat.isSocket()) {
-        const piped = readFileSync(0, 'utf8');
-        if (piped.length > 0) body = piped;
-      }
-    } catch { /* stdin not introspectable */ }
+    body = readPipedBodyInput();
   }
   if (!body || !body.trim()) die(BODY_USAGE);
 

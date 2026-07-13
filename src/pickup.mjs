@@ -85,11 +85,13 @@ function ownershipRoot(config) {
 
 export function canonicalPlanIdentity(filePath, config) {
   const authorized = authorizeManagedSource(filePath, config, { kind: 'Ownership plan source' });
-  const canonicalPath = canonicalizePathEntrySpelling(realpathSync(authorized.path));
+  const resolved = canonicalizePathEntrySpelling(realpathSync(authorized.path));
+  const canonicalPath = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  const managedDisplayPath = canonicalizePathEntrySpelling(authorized.path);
   return {
     canonicalPath,
     key: createHash('sha256').update(canonicalPath).digest('hex'),
-    repoPath: path.relative(realpathSync(config.repoRoot), canonicalPath).split(path.sep).join('/'),
+    repoPath: path.relative(config.repoRoot, managedDisplayPath).split(path.sep).join('/'),
     managedPath: authorized.path,
   };
 }
@@ -102,11 +104,12 @@ export function plannedPlanIdentity(filePath, config) {
     suffix.unshift(path.basename(parent));
     parent = path.dirname(parent);
   }
-  const canonicalPath = canonicalizePathEntrySpelling(path.join(realpathSync(parent), ...suffix));
+  const resolved = canonicalizePathEntrySpelling(path.join(realpathSync(parent), ...suffix));
+  const canonicalPath = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
   return {
     canonicalPath,
     key: createHash('sha256').update(canonicalPath).digest('hex'),
-    repoPath: path.relative(realpathSync(config.repoRoot), canonicalPath).split(path.sep).join('/'),
+    repoPath: path.relative(config.repoRoot, absolute).split(path.sep).join('/'),
     managedPath: absolute,
   };
 }

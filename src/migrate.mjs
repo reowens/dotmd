@@ -39,7 +39,11 @@ export function runMigrate(argv, config, opts = {}) {
         matched.push(filePath);
         continue;
       }
-      const hits = allFiles.filter(f => f.includes(input) || path.basename(f).includes(input));
+      const normalizedInput = input.replaceAll('\\', '/');
+      const hits = allFiles.filter(f => {
+        const repoPath = toRepoPath(f, config.repoRoot);
+        return repoPath.includes(normalizedInput) || path.basename(f).includes(input);
+      });
       if (hits.length === 0) {
         unresolved.push(input);
       } else {

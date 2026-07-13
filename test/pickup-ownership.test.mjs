@@ -233,7 +233,7 @@ describe('durable lifecycle ownership', () => {
     strictEqual(aliased.key, direct.key);
     strictEqual(aliased.canonicalPath, direct.canonicalPath);
 
-    const caseAlias = file.replace('/docs/', '/DOCS/');
+    const caseAlias = path.join(tmp, 'DOCS', 'plans', 'identity.md');
     if (existsSync(caseAlias)) {
       const cased = canonicalPlanIdentity(caseAlias, config);
       strictEqual(cased.key, direct.key);
@@ -241,18 +241,22 @@ describe('durable lifecycle ownership', () => {
   });
 
   it('canonicalizes filename entry spelling through the injectable filesystem abstraction', () => {
+    const root = path.parse(path.resolve('repo')).root;
+    const repo = path.join(root, 'repo');
+    const exact = path.join(repo, 'Foo.md');
+    const alias = path.join(repo, 'foo.md');
     const ids = new Map([
-      ['/', [1n, 1n]], ['/repo', [1n, 2n]], ['/repo/Foo.md', [1n, 3n]], ['/repo/foo.md', [1n, 3n]],
+      [root, [1n, 1n]], [repo, [1n, 2n]], [exact, [1n, 3n]], [alias, [1n, 3n]],
     ]);
     const fs = {
-      readdirSync(dir) { return dir === '/' ? ['repo'] : dir === '/repo' ? ['Foo.md'] : []; },
+      readdirSync(dir) { return dir === root ? ['repo'] : dir === repo ? ['Foo.md'] : []; },
       statSync(file) {
         const identity = ids.get(file);
         if (!identity) throw new Error('missing');
         return { dev: identity[0], ino: identity[1] };
       },
     };
-    strictEqual(canonicalizePathEntrySpelling('/repo/foo.md', fs), '/repo/Foo.md');
+    strictEqual(canonicalizePathEntrySpelling(alias, fs), exact);
   });
 
   it('claims filename case aliases as one plan and rejects a second session where supported', async () => {

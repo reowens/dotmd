@@ -126,7 +126,7 @@ describe('buildGraph', () => {
     strictEqual(graph.stats.edgeCount, 1);
   });
 
-  it('does not merge edge tuples whose pipe-joined forms collide', () => {
+  it('does not merge edge tuples whose pipe-joined forms collide', { skip: process.platform === 'win32' && 'Windows filenames cannot contain pipes' }, () => {
     tmpDir = mkdtempSync(path.join(os.tmpdir(), 'dotmd-graph-tuples-'));
     const repoRoot = tmpDir;
     for (const relative of [

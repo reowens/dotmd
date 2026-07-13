@@ -145,7 +145,7 @@ describe('dotmd ship (--dry-run, end-to-end)', () => {
     strictEqual(listStagedPaths(tmpDir).sort().join(','), 'docs/note.md,secret.env');
   });
 
-  it('preversion refuses a staged file even when npm version uses --force', () => {
+  it('preversion refuses a staged file even when npm version uses --force', { skip: process.platform === 'win32' && 'release automation is POSIX-only' }, () => {
     setupRepo();
     const pkgPath = path.join(tmpDir, 'package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
@@ -180,7 +180,7 @@ describe('dotmd ship (--dry-run, end-to-end)', () => {
     strictEqual(listStagedPaths(tmpDir).length, 0);
   });
 
-  it('reads unusual dirty paths without porcelain quoting loss', () => {
+  it('reads unusual dirty paths without porcelain quoting loss', { skip: process.platform === 'win32' && 'Windows forbids these filename characters' }, () => {
     setupRepo();
     const names = ['docs/arrow -> note.md', 'docs/unicøde.md', 'docs/line\nbreak.md'];
     for (const name of names) writeFileSync(path.join(tmpDir, name), '# Note\n');

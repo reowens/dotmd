@@ -74,8 +74,9 @@ describe('removed product surfaces', () => {
 
   it('installs a packed artifact with no removed surface or runtime dependencies', () => {
     const temp = mkdtempSync(path.join(os.tmpdir(), 'dotmd-removed-pack-'));
+    const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
     try {
-      const packed = spawnSync('npm', ['pack', '--json', '--ignore-scripts', '--pack-destination', temp], {
+      const packed = spawnSync(npm, ['pack', '--json', '--ignore-scripts', '--pack-destination', temp], {
         cwd: root,
         encoding: 'utf8',
       });
@@ -90,12 +91,12 @@ describe('removed product surfaces', () => {
       const installEnv = { ...process.env };
       delete installEnv.npm_config_allow_scripts;
       delete installEnv.NPM_CONFIG_ALLOW_SCRIPTS;
-      const installed = spawnSync('npm', [
+      const installed = spawnSync(npm, [
         'install', '--ignore-scripts', '--omit=dev', '--no-audit', '--no-fund', path.join(temp, packResult.filename),
       ], { cwd: installRoot, encoding: 'utf8', env: installEnv });
       strictEqual(installed.status, 0, installed.stderr);
 
-      const tree = spawnSync('npm', ['ls', '--omit=dev', '--json'], { cwd: installRoot, encoding: 'utf8' });
+      const tree = spawnSync(npm, ['ls', '--omit=dev', '--json'], { cwd: installRoot, encoding: 'utf8' });
       strictEqual(tree.status, 0, tree.stderr);
       const installedPackage = JSON.parse(tree.stdout).dependencies?.['dotmd-cli'];
       ok(installedPackage, tree.stdout);

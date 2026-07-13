@@ -283,6 +283,18 @@ export function readBodyInput(source) {
   return source;
 }
 
+export function readPipedBodyInput() {
+  try {
+    const stat = fstatSync(0);
+    const isWindowsPipe = process.platform === 'win32' && !process.stdin.isTTY;
+    if (stat.isFIFO() || stat.isFile() || stat.isSocket() || isWindowsPipe) {
+      const piped = readFileSync(0, 'utf8');
+      return piped.length > 0 ? piped : null;
+    }
+  } catch { /* stdin not introspectable */ }
+  return null;
+}
+
 // Slug/title helpers shared by name resolution and runlist child generation.
 export function slugify(s) {
   return s.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
@@ -686,16 +698,11 @@ export async function runNew(argv, config, opts = {}) {
     // delivers stdin as an AF_UNIX socket). Probe this even for templates that
     // don't accept bodies so the fail-fast guard below can reject accidental
     // heredoc/input instead of silently scaffolding without it.
-    try {
-      const stat = fstatSync(0);
-      if (stat.isFIFO() || stat.isFile() || stat.isSocket()) {
-        const piped = readFileSync(0, 'utf8');
-        if (piped.length > 0) {
-          bodyInput = piped;
-          bodyInputSource = 'piped stdin';
-        }
-      }
-    } catch { /* stdin not introspectable — skip auto-consume */ }
+    const piped = readPipedBodyInput();
+    if (piped !== null) {
+      bodyInput = piped;
+      bodyInputSource = 'piped stdin';
+    }
   }
 
   // If the body input has a leading `---…---` frontmatter block, lift its keys

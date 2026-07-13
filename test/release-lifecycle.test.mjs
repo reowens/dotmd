@@ -66,7 +66,7 @@ test('release preflight blocks a new bump while another release intent is incomp
   assert.throws(() => runReleasePreflight(root), /release v1\.0\.1 is incomplete.*release:resume/);
 });
 
-test('real npm version lifecycle carries target intent through commit and tag', () => {
+test('real npm version lifecycle carries target intent through commit and tag', { skip: process.platform === 'win32' && 'release automation is POSIX-only' }, () => {
   setupRepo();
   const scriptsDir = path.resolve(import.meta.dirname, '..', 'scripts');
   const pkg = {

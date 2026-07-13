@@ -133,10 +133,10 @@ function slugToPlanPath(s, config) {
 // Resolve a markdown body link relative to the prompt's location so e.g.
 // `../plans/foo.md` from docs/prompts/x.md → docs/plans/foo.md.
 function resolveBodyLink(link, promptRepoPath) {
-  const cleaned = link.replace(/#.*$/, '');
+  const cleaned = link.replace(/#.*$/, '').replaceAll('\\', '/');
   if (cleaned.startsWith('/')) return cleaned.replace(/^\/+/, '');
-  const promptDir = path.dirname(promptRepoPath);
-  return path.normalize(path.join(promptDir, cleaned));
+  const promptDir = path.posix.dirname(promptRepoPath.replaceAll('\\', '/'));
+  return path.posix.normalize(path.posix.join(promptDir, cleaned));
 }
 
 function renderPromptsVerbose(index, config, { hasStatusFlag, includeArchived }) {

@@ -85,6 +85,10 @@ function which(bin) {
   }
 }
 
+function executableName(bin) {
+  return process.platform === 'win32' && !bin.endsWith('.cmd') ? `${bin}.cmd` : bin;
+}
+
 export function runUpdate(argv, _config, opts = {}) {
   const check = argv.includes('--check');
   const cliOnly = argv.includes('--cli-only');
@@ -122,7 +126,7 @@ export function runUpdate(argv, _config, opts = {}) {
       continue;
     }
     process.stdout.write(dim(`$ ${s.cmd.join(' ')}\n`));
-    const r = spawnSync(s.cmd[0], s.cmd.slice(1), { stdio: 'inherit' });
+    const r = spawnSync(executableName(s.cmd[0]), s.cmd.slice(1), { stdio: 'inherit' });
     ran = true;
     if (r.status !== 0) {
       failed = true;

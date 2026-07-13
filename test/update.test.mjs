@@ -115,15 +115,18 @@ test('update --dry-run previews global commands without executing them', () => {
     mkdirSync(fakeBin, { recursive: true });
     const sentinel = path.join(home, 'executed');
     for (const name of ['npm', 'claude']) {
-      const file = path.join(fakeBin, name);
-      writeFileSync(file, `#!/bin/sh\nprintf called > ${JSON.stringify(sentinel)}\n`);
-      chmodSync(file, 0o755);
+      const file = path.join(fakeBin, process.platform === 'win32' ? `${name}.cmd` : name);
+      if (process.platform === 'win32') writeFileSync(file, `@echo called > ${JSON.stringify(sentinel)}\r\n`);
+      else {
+        writeFileSync(file, `#!/bin/sh\nprintf called > ${JSON.stringify(sentinel)}\n`);
+        chmodSync(file, 0o755);
+      }
     }
     const bin = path.resolve(import.meta.dirname, '..', 'bin', 'dotmd.mjs');
     const result = spawnSync('node', [bin, 'update', '--dry-run'], {
       cwd: home,
       encoding: 'utf8',
-      env: { ...process.env, HOME: home, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` },
+      env: { ...process.env, HOME: home, USERPROFILE: home, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` },
     });
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /\[dry-run\] Would run: npm i -g/);

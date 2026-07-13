@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { evaluateGuard } from '../src/guard.mjs';
 
 const config = { configFound: true, repoRoot: '/repo', docsRoots: ['docs'] };
@@ -48,9 +49,10 @@ for (const command of ['git -C . add .', 'env git add .', 'command git add .', '
 }
 
 test('git -C and cd segments inspect the command repository, including sudo wrappers', () => {
+  const repoRoot = path.resolve('/repo');
   const seen = [];
   const deps = {
-    gitCwd: '/repo/subdir',
+    gitCwd: path.join(repoRoot, 'subdir'),
     inspectGitPaths: (_subcommand, _args, cwd) => { seen.push(cwd); return ['docs/prompts/live.md']; },
   };
   assert.equal(evaluateGuard(
@@ -59,7 +61,7 @@ test('git -C and cd segments inspect the command repository, including sudo wrap
   assert.equal(evaluateGuard(
     { tool_name: 'Bash', tool_input: { command: 'cd ../other && sudo git add .' } }, config, deps,
   )?.rule, 'commit-prompt');
-  assert.deepEqual(seen, ['/repo/other', '/repo/other']);
+  assert.deepEqual(seen, [path.join(repoRoot, 'other'), path.join(repoRoot, 'other')]);
 });
 
 test('broad Git forms allow clean or archived prompts', () => {

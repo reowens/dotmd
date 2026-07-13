@@ -24,7 +24,7 @@ function runHook(args, pathDir, input) {
   });
 }
 
-describe('plugin hook wrapper (missing dotmd binary)', () => {
+describe('plugin hook wrapper (missing dotmd binary)', { skip: process.platform === 'win32' && 'POSIX sh plugin wrapper' }, () => {
   it('--hint surfaces a single install hint and exits 0', () => {
     // Empty temp dir on PATH → no `dotmd`. `command -v` / `echo` are shell
     // builtins, so the wrapper still runs.
@@ -62,7 +62,7 @@ describe('plugin hook wrapper (missing dotmd binary)', () => {
   });
 });
 
-describe('plugin hook wrapper (dotmd present)', () => {
+describe('plugin hook wrapper (dotmd present)', { skip: process.platform === 'win32' && 'POSIX sh plugin wrapper' }, () => {
   it('execs the real binary, forwarding all args', () => {
     const binDir = mkdtempSync(path.join(os.tmpdir(), 'dotmd-fakebin-'));
     try {

@@ -18,6 +18,7 @@ import {
 import { spawn, spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import {
   createFileExclusive,
@@ -34,7 +35,7 @@ import { runArchive } from '../src/lifecycle.mjs';
 import { consumePrompt } from '../src/prompts.mjs';
 import { captureGitIndexGeneration, captureGitIndexPaths } from '../src/git.mjs';
 
-const modulePath = path.resolve(import.meta.dirname, '..', 'src', 'atomic-mutation.mjs');
+const modulePath = pathToFileURL(path.resolve(import.meta.dirname, '..', 'src', 'atomic-mutation.mjs')).href;
 const bin = path.resolve(import.meta.dirname, '..', 'bin', 'dotmd.mjs');
 let tmpDir;
 const activeChildren = new Set();
@@ -113,10 +114,10 @@ describe('atomic mutation substrate', () => {
     const root = setup();
     const file = path.join(root, 'doc.md');
     writeFileSync(file, 'old\n');
-    chmodSync(file, 0o640);
+    if (process.platform !== 'win32') chmodSync(file, 0o640);
     const snapshot = snapshotFile(file);
     replaceSnapshot(snapshot, 'new\n', { repoRoot: root });
-    strictEqual(statSync(file).mode & 0o777, 0o640);
+    if (process.platform !== 'win32') strictEqual(statSync(file).mode & 0o777, 0o640);
 
     throws(() => withPathLocks([file], { repoRoot: root }, () => { throw new Error('boom'); }), /boom/);
     strictEqual(lockEntries(root).length, 0);
@@ -131,13 +132,14 @@ describe('atomic mutation substrate', () => {
       import { createFileExclusive } from ${JSON.stringify(modulePath)};
       writeFileSync(process.argv[5], 'ready');
       while (!existsSync(process.argv[4])) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
-      try { createFileExclusive(process.argv[1], process.argv[2], { repoRoot: process.argv[3] }); }
+      const content = 'winner-' + process.argv[2] + ':' + 'x'.repeat(100_000);
+      try { createFileExclusive(process.argv[1], content, { repoRoot: process.argv[3] }); }
       catch (err) { process.stderr.write(err.code || err.message); process.exit(2); }
     `;
     const attempts = Array.from({ length: 8 }, (_, i) => {
       const content = `winner-${i}:` + 'x'.repeat(100_000);
       const ready = path.join(root, `create-${i}.ready`);
-      return { content, ready, done: completed(child(code, [destination, content, root, gate, ready])) };
+      return { content, ready, done: completed(child(code, [destination, String(i), root, gate, ready])) };
     });
     await waitForFiles(attempts.map(a => a.ready));
     writeFileSync(gate, 'go');
@@ -888,7 +890,7 @@ describe('atomic mutation substrate', () => {
     strictEqual(readFileSync(retainedPath).length > 0, true);
   });
 
-  it('fsyncs indexDir after removing a failed transaction-owned publication lock', () => {
+  it('fsyncs indexDir after removing a failed transaction-owned publication lock', { skip: process.platform === 'win32' && 'Windows does not expose POSIX chmod changes' }, () => {
     const root = setup();
     const source = path.join(root, 'source.md');
     const target = path.join(root, 'target.md');
@@ -1087,7 +1089,7 @@ describe('atomic mutation substrate', () => {
       if (!objectFormat) strictEqual(before.exists, false);
       moveFileAtomic(source, target, 'new', { repoRoot: root, operation: 'rename', gitMove: true, gitIndex: before });
       strictEqual(spawnSync('git', ['ls-files', '--error-unmatch', 'target.md'], { cwd: root }).status, 0);
-      if (!objectFormat) strictEqual(statSync(path.join(root, '.git', 'index')).mode & 0o777, 0o666 & ~process.umask());
+      if (!objectFormat && process.platform !== 'win32') strictEqual(statSync(path.join(root, '.git', 'index')).mode & 0o777, 0o666 & ~process.umask());
       strictEqual(existsSync(path.join(root, '.git', 'index.lock')), false);
       rmSync(root, { recursive: true, force: true });
       tmpDir = null;
@@ -1105,10 +1107,10 @@ describe('atomic mutation substrate', () => {
     spawnSync('git', ['add', 'source.md'], { cwd: root });
     spawnSync('git', ['commit', '-qm', 'initial'], { cwd: root });
     const normalIndex = path.join(root, '.git', 'index');
-    chmodSync(normalIndex, 0o660);
+    if (process.platform !== 'win32') chmodSync(normalIndex, 0o660);
     const alternate = path.join(root, '.git', 'alternate-index');
     writeFileSync(alternate, readFileSync(normalIndex), { mode: 0o660 });
-    chmodSync(alternate, 0o660);
+    if (process.platform !== 'win32') chmodSync(alternate, 0o660);
     const normalBytes = readFileSync(normalIndex);
     const prior = process.env.GIT_INDEX_FILE;
     process.env.GIT_INDEX_FILE = '.git/alternate-index';
@@ -1116,7 +1118,7 @@ describe('atomic mutation substrate', () => {
       const before = captureGitIndexGeneration(root);
       strictEqual(before.indexPath, alternate);
       moveFileAtomic(source, target, 'new', { repoRoot: root, operation: 'rename', gitMove: true, gitIndex: before });
-      strictEqual(statSync(alternate).mode & 0o777, 0o660);
+      if (process.platform !== 'win32') strictEqual(statSync(alternate).mode & 0o777, 0o660);
       strictEqual(spawnSync('git', ['ls-files', '--error-unmatch', 'target.md'], { cwd: root }).status, 0);
       strictEqual(Buffer.compare(readFileSync(normalIndex), normalBytes), 0, 'normal index remains untouched');
       strictEqual(existsSync(`${alternate}.lock`), false);
@@ -1173,7 +1175,7 @@ describe('atomic mutation substrate', () => {
     }
   });
 
-  it('treats a same-byte concurrent index chmod as a CAS conflict', () => {
+  it('treats a same-byte concurrent index chmod as a CAS conflict', { skip: process.platform === 'win32' && 'Windows does not expose POSIX chmod changes' }, () => {
     const root = setup();
     spawnSync('git', ['init', '-q'], { cwd: root });
     const source = path.join(root, 'source.md');
