@@ -1,9 +1,9 @@
 ---
 type: plan
-status: in-session
+status: archived
 created: 2026-07-10T06:00:55Z
-updated: 2026-07-13T21:58:34Z
-parent_plan: dotmd-primary-consumer-hardening.md
+updated: 2026-07-13T23:24:02Z
+parent_plan: ../plans/dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
   - "> ../dotmd-primary-consumer-audit.md"
@@ -13,7 +13,7 @@ next_step: Add macOS/Windows characterization lanes first, classify failures, th
 
 # Cross Platform Contract
 
-> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
 
 ## Problem
 
@@ -27,17 +27,17 @@ The installed CLI presents as portable Node code, but literal separators, prefix
 
 ## Phases
 
-### Phase 1 - CI Characterization ⬜
+### Phase 1 - CI Characterization ✅
 
 - Add macOS and Windows Node 22 lanes while retaining Ubuntu Node 20/22/24.
 - Record failures before changing assertions or behavior.
 
-### Phase 2 - Path Corrections ⬜
+### Phase 2 - Path Corrections ✅
 
 - Replace URL `.pathname` with `fileURLToPath` in watch.
 - Replace root string-prefix logic across index/lifecycle/lint/bulk-tag with shared containment.
 
-### Phase 3 - Contract Documentation ⬜
+### Phase 3 - Contract Documentation ✅
 
 - State runtime platforms and POSIX-only release scope in contributor/user docs.
 
@@ -48,8 +48,16 @@ The installed CLI presents as portable Node code, but literal separators, prefix
 - Root ownership/archive destination is separator independent.
 - Watch launches correctly from paths with spaces and URL-escaped characters.
 
+## Closeout
+
+- Outcomes: the runtime contract now covers Linux, macOS, and Windows, while release automation and the plugin shell wrapper remain explicitly POSIX-only.
+- Path behavior: root ownership, archive destinations, file-URL imports, prompt links, migration matching, and lifecycle ownership are separator independent.
+- Verification: the full suite passes on Ubuntu Node 20/22/24, macOS Node 22, and Windows Node 22 in CI run `29292704300`.
+- Platform boundaries: Windows skips are limited to POSIX-only behavior or filesystem contracts Windows cannot represent.
+
 
 ## Version History
 
+- **2026-07-13T23:24:02Z** Archived — Cross-platform CI passes on Ubuntu Node 20/22/24, macOS Node 22, and Windows Node 22.
 - **2026-07-13T21:58:34Z** Started (planned → in-session).
 - **2026-07-10T06:00:55Z** Created (runlist child of dotmd-primary-consumer-hardening).
