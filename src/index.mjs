@@ -141,7 +141,7 @@ export function buildIndex(config, opts = {}) {
       if (hub) hub.warnings.push(w);
     }
 
-    const gitWarnings = checkGitStaleness(transformedDocs, config);
+    const gitWarnings = checkGitStaleness(transformedDocs, config, opts.gitMetadataOptions);
     warnings.push(...gitWarnings);
 
     const claudeWarnings = checkClaudeCommands(config.repoRoot);
@@ -370,7 +370,7 @@ export function parseDocFile(filePath, config, opts = {}) {
     hasNextStep: Boolean(nextStep),
     hasBlockers: blockers.length > 0,
     daysSinceUpdate: computeDaysSinceUpdate(asString(parsedFrontmatter.updated) ?? null),
-    isStale: computeIsStale(asString(parsedFrontmatter.status), asString(parsedFrontmatter.updated) ?? null, config),
+    isStale: computeIsStale(asString(parsedFrontmatter.status), asString(parsedFrontmatter.updated) ?? null, config, docType),
     warnings: [],
     errors: [],
   };

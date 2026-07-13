@@ -139,11 +139,6 @@ export function updateFrontmatterAtomic(filePath, updates, config, options = {})
   });
 }
 
-function findFileRoot(filePath, config) {
-  const roots = config.docsRoots || [config.docsRoot];
-  return roots.find(r => filePath.startsWith(r + '/')) ?? config.docsRoot;
-}
-
 function defaultTypeDir(docType, config) {
   if (docType === 'plan') return 'plans';
   if (docType === 'prompt') return 'prompts';
@@ -1151,7 +1146,12 @@ export function runTouch(argv, config, opts = {}) {
 
     const prefix = dryRun ? dim('[dry-run] ') : '';
     let synced = 0;
-    const gitDates = getGitLastModifiedBatch(config.repoRoot);
+    const repoPaths = allFiles.map(filePath => toRepoPath(filePath, config.repoRoot));
+    const gitMetadata = getGitLastModifiedBatch(config.repoRoot, repoPaths, opts.gitMetadataOptions);
+    if (!gitMetadata.complete) {
+      die(`Cannot touch from incomplete Git metadata (${gitMetadata.reason}); no files were changed.`);
+    }
+    const gitDates = gitMetadata.dates;
 
     for (const filePath of allFiles) {
       const repoPath = toRepoPath(filePath, config.repoRoot);

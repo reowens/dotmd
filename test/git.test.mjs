@@ -4,7 +4,9 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, realpathSync, existsSync
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { getGitLastModified, gitMv, gitDiffSince, inspectGitCommandPaths } from '../src/git.mjs';
+import { getGitLastModified, getGitLastModifiedBatch, gitMv, gitDiffSince, inspectGitCommandPaths } from '../src/git.mjs';
+import { checkGitStaleness } from '../src/validate.mjs';
+import { filterDocs } from '../src/query.mjs';
 
 let tmpDir;
 
@@ -49,6 +51,97 @@ describe('getGitLastModified', () => {
     commitFile(initFile, 'init\n');
     const result = getGitLastModified('nonexistent.md', tmpDir);
     strictEqual(result, null);
+  });
+});
+
+describe('getGitLastModifiedBatch', () => {
+  it('scopes history and returned dates to the requested managed paths', () => {
+    setupRepo();
+    commitFile(path.join(tmpDir, 'managed.md'), '# Managed\n', '2024-01-10T12:00:00Z');
+    commitFile(path.join(tmpDir, 'unrelated.txt'), 'noise\n', '2025-01-10T12:00:00Z');
+
+    const result = getGitLastModifiedBatch(tmpDir, ['managed.md']);
+    strictEqual(result.complete, true);
+    strictEqual(result.reason, null);
+    strictEqual(result.dates.size, 1);
+    ok(result.dates.get('managed.md').startsWith('2024-01-10'));
+    strictEqual(result.dates.has('unrelated.txt'), false);
+  });
+
+  it('returns known dates and explicit metadata when the commit limit is reached', () => {
+    setupRepo();
+    commitFile(path.join(tmpDir, 'oldest.md'), '# Oldest\n', '2024-01-01T12:00:00Z');
+    commitFile(path.join(tmpDir, 'middle.md'), '# Middle\n', '2024-02-01T12:00:00Z');
+    commitFile(path.join(tmpDir, 'newest.md'), '# Newest\n', '2024-03-01T12:00:00Z');
+
+    const result = getGitLastModifiedBatch(tmpDir, ['oldest.md', 'middle.md', 'newest.md'], { maxCommits: 2 });
+    strictEqual(result.complete, false);
+    strictEqual(result.reason, 'commit-limit');
+    ok(result.dates.has('newest.md'));
+    ok(result.dates.has('middle.md'));
+    strictEqual(result.dates.has('oldest.md'), false);
+  });
+
+  it('reports output truncation instead of silently returning an empty map', () => {
+    setupRepo();
+    const filePath = path.join(tmpDir, 'repeated.md');
+    commitFile(filePath, '# 0\n', '2024-01-01T12:00:00Z');
+    for (let i = 1; i <= 4; i++) {
+      commitFile(filePath, `# ${i}\n`, `2024-01-0${i + 1}T12:00:00Z`);
+    }
+
+    const result = getGitLastModifiedBatch(tmpDir, ['repeated.md'], { maxBuffer: 64 });
+    strictEqual(result.complete, false);
+    strictEqual(result.reason, 'output-limit');
+  });
+
+  it('treats a non-Git directory as gracefully empty history', () => {
+    tmpDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'dotmd-no-git-')));
+    const result = getGitLastModifiedBatch(tmpDir, ['doc.md']);
+    strictEqual(result.complete, true);
+    strictEqual(result.reason, null);
+    strictEqual(result.dates.size, 0);
+  });
+
+  it('keeps known staleness warnings and adds one warning for partial history', () => {
+    setupRepo();
+    const filePath = path.join(tmpDir, 'doc.md');
+    commitFile(filePath, '# First\n', '2024-01-01T12:00:00Z');
+    commitFile(filePath, '# Latest\n', '2025-01-01T12:00:00Z');
+    const docsRoot = tmpDir;
+    const warnings = checkGitStaleness([
+      { path: 'doc.md', status: 'active', updated: '2020-01-01' },
+    ], {
+      repoRoot: tmpDir,
+      docsRoot,
+      lifecycle: { skipStaleFor: new Set() },
+    }, { maxCommits: 1 });
+
+    strictEqual(warnings.filter(warning => warning.message.includes('behind git history')).length, 1);
+    strictEqual(warnings.filter(warning => warning.message.includes('Git metadata is incomplete')).length, 1);
+  });
+
+  it('uses known dates and emits one query warning for partial history', () => {
+    setupRepo();
+    const filePath = path.join(tmpDir, 'doc.md');
+    commitFile(filePath, '# First\n', '2024-01-01T12:00:00Z');
+    commitFile(filePath, '# Latest\n', '2025-01-01T12:00:00Z');
+    const doc = { path: 'doc.md', status: 'active', updated: '2020-01-01', daysSinceUpdate: 1, isStale: false };
+    let stderr = '';
+    const originalWrite = process.stderr.write;
+    process.stderr.write = chunk => { stderr += String(chunk); return true; };
+    try {
+      const result = filterDocs([doc], { git: true, sort: 'updated', all: true, limit: 10 }, {
+        repoRoot: tmpDir,
+        raw: {},
+        staleDaysByStatus: { active: 14 },
+      }, { maxCommits: 1 });
+      strictEqual(result.length, 1);
+      ok(result[0].daysSinceUpdate > 1, 'known Git date replaces the frontmatter age');
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+    strictEqual((stderr.match(/Git metadata is incomplete/g) ?? []).length, 1);
   });
 });
 

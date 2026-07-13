@@ -1,9 +1,9 @@
 ---
 type: plan
-status: planned
+status: archived
 created: 2026-07-10T05:53:02Z
-updated: 2026-07-10T05:53:02Z
-parent_plan: dotmd-primary-consumer-hardening.md
+updated: 2026-07-13T17:57:35Z
+parent_plan: ../plans/dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
   - "> ../dotmd-primary-consumer-audit.md"
@@ -13,7 +13,7 @@ next_step: Inventory every dispatched command, alias, positional form, option, a
 
 # Command Schema Contracts
 
-> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
 
 ## Problem
 
@@ -47,7 +47,15 @@ Command names, flags, help, completions, and grammar are maintained separately. 
 - `bulk-tag --type plan` reaches the command-local override while global `--type` remains compatible.
 - No command remains on permissive legacy validation at completion.
 
+## Closeout
+
+- Outcomes: one declarative schema now owns command grammar, policy, aliases, visibility, help groups, strict validation, and completion metadata.
+- Verification: both roadmap forms and command-local `bulk-tag --type` have CLI regressions; the full 1,573-test suite passes.
+- Deferrals: agent-context payload work remains in the next runlist child, `dotmd-primary-consumer-hardening-13-agent-context-v1.md`.
+
 
 ## Version History
 
+- **2026-07-13T17:57:35Z** Archived — Shipped declarative command grammar, strict dispatcher validation, schema-derived completions/help fallback, roadmap form normalization, and command-local option ownership; all 1,573 tests pass.
+- **2026-07-13T17:35:29Z** Started (planned → in-session).
 - **2026-07-10T05:53:02Z** Created (runlist child of dotmd-primary-consumer-hardening).

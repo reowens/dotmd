@@ -1,4 +1,4 @@
-import { readFileSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { extractFrontmatter, parseSimpleFrontmatter } from './frontmatter.mjs';
 import { asString, toRepoPath, die, resolveDocPath, isArchivedPath } from './util.mjs';
@@ -14,6 +14,7 @@ import {
   preparePlanClaim,
   readPlanOwnership,
 } from './pickup.mjs';
+import { actionablePromptStatuses, comparePromptDocs } from './status-metadata.mjs';
 
 // `resume` is an alias for `use` — agents reach for "resume" when continuing a
 // session; `use` reads as internal mechanics. Both names stay valid; the
@@ -166,25 +167,16 @@ function renderPromptsVerbose(index, config, { hasStatusFlag, includeArchived })
 
 export function pendingPromptsOldestFirst(config) {
   const index = buildIndex(config);
+  const actionable = actionablePromptStatuses(config);
   const prompts = index.docs.filter(d =>
     d.type === 'prompt'
-    && d.status === 'pending'
+    && actionable.has(d.status)
     && !isArchivedPath(d.path, config),
   );
 
   return prompts
-    .map(d => {
-      const abs = resolveDocPath(d.path, config);
-      let mtime = 0;
-      try { mtime = abs ? statSync(abs).mtimeMs : 0; } catch { mtime = 0; }
-      return { doc: d, abs, created: d.created ?? '', mtime };
-    })
-    .sort((a, b) => {
-      if (a.created && b.created && a.created !== b.created) return a.created.localeCompare(b.created);
-      if (a.created && !b.created) return -1;
-      if (!a.created && b.created) return 1;
-      return a.mtime - b.mtime;
-    });
+    .sort(comparePromptDocs)
+    .map(d => ({ doc: d, abs: resolveDocPath(d.path, config), created: d.created ?? '' }));
 }
 
 async function runPromptsNext(argv, config, opts = {}) {

@@ -30,9 +30,9 @@ runlist:
   - ../archived/dotmd-primary-consumer-hardening-05-lifecycle-ownership.md
   - ../archived/dotmd-primary-consumer-hardening-06-transactional-moves.md
   - ../archived/dotmd-primary-consumer-hardening-12-path-identity-outputs.md
-  - dotmd-primary-consumer-hardening-08-command-agent-contracts.md
-  - dotmd-primary-consumer-hardening-13-agent-context-v1.md
-  - dotmd-primary-consumer-hardening-14-bounded-git-metadata.md
+  - ../archived/dotmd-primary-consumer-hardening-08-command-agent-contracts.md
+  - ../archived/dotmd-primary-consumer-hardening-13-agent-context-v1.md
+  - ../archived/dotmd-primary-consumer-hardening-14-bounded-git-metadata.md
   - dotmd-primary-consumer-hardening-15-cross-platform-contract.md
   - dotmd-primary-consumer-hardening-09-operational-cleanup.md
   - dotmd-primary-consumer-hardening-10-mcp-readonly.md
@@ -100,9 +100,9 @@ Fixing findings independently would duplicate logic and preserve the underlying 
 7. [Lifecycle Ownership](../archived/dotmd-primary-consumer-hardening-05-lifecycle-ownership.md) ⬜
 8. [Transactional Moves](../archived/dotmd-primary-consumer-hardening-06-transactional-moves.md) ⬜
 9. [Path Identity Outputs](../archived/dotmd-primary-consumer-hardening-12-path-identity-outputs.md) ⬜
-10. [Command Schema Contracts](dotmd-primary-consumer-hardening-08-command-agent-contracts.md) ⬜
-11. [Agent Context V1](dotmd-primary-consumer-hardening-13-agent-context-v1.md) ⬜
-12. [Bounded Git Metadata](dotmd-primary-consumer-hardening-14-bounded-git-metadata.md) ⬜
+10. [Command Schema Contracts](../archived/dotmd-primary-consumer-hardening-08-command-agent-contracts.md) ⬜
+11. [Agent Context V1](../archived/dotmd-primary-consumer-hardening-13-agent-context-v1.md) ⬜
+12. [Bounded Git Metadata](../archived/dotmd-primary-consumer-hardening-14-bounded-git-metadata.md) ⬜
 13. [Cross Platform Contract](dotmd-primary-consumer-hardening-15-cross-platform-contract.md) ⬜
 14. [Documentation And Deck Hygiene](dotmd-primary-consumer-hardening-09-operational-cleanup.md) ⬜
 15. [MCP Read-Only Experiment](dotmd-primary-consumer-hardening-10-mcp-readonly.md) ⬜

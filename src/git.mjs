@@ -58,22 +58,88 @@ export function getGitFirstAdded(relPath, repoRoot) {
   return lines[lines.length - 1] ?? null;
 }
 
-export function getGitLastModifiedBatch(repoRoot) {
-  const result = spawnSync('git', [
-    'log', '--format=commit %aI', '--name-only', '--diff-filter=ACDMR', 'HEAD',
-  ], { cwd: repoRoot, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
-  if (result.error || result.status !== 0) return new Map();
+const DEFAULT_GIT_METADATA_MAX_COMMITS = 10_000;
+const DEFAULT_GIT_METADATA_MAX_BUFFER = 10 * 1024 * 1024;
+const DEFAULT_GIT_METADATA_PATH_BATCH = 256;
 
-  const map = new Map();
+function boundedPositiveInteger(value, fallback, name) {
+  if (value == null) return fallback;
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new TypeError(`${name} must be a positive integer`);
+  }
+  return value;
+}
+
+function unavailableGitHistory(result) {
+  if (result.error?.code === 'ENOENT') return true;
+  const detail = `${result.stderr ?? ''}\n${result.error?.message ?? ''}`;
+  return /not a git repository|does not have any commits yet|bad revision ['"]?HEAD|ambiguous argument ['"]?HEAD/i.test(detail);
+}
+
+function parseGitMetadataOutput(stdout, dates, expectedPaths) {
+  const fields = String(stdout ?? '').split('\0');
   let currentDate = null;
-  for (const line of result.stdout.split('\n')) {
-    if (line.startsWith('commit ')) {
-      currentDate = line.slice(7).trim();
-    } else if (line && currentDate && !map.has(line)) {
-      map.set(line, currentDate);
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i];
+    if (field === 'dotmd:git-metadata:commit' && /^\d{4}-\d{2}-\d{2}T/.test(fields[i + 1] ?? '')) {
+      currentDate = fields[++i];
+      continue;
+    }
+    const filePath = field.startsWith('\n') ? field.slice(1) : field;
+    if (filePath && currentDate && expectedPaths.has(filePath) && !dates.has(filePath)) {
+      dates.set(filePath, currentDate);
     }
   }
-  return map;
+}
+
+// Read latest Git dates only for the current managed paths. Every subprocess
+// has explicit history, output, and path-count bounds. Callers must inspect
+// `complete` before using missing dates as evidence that no history exists.
+export function getGitLastModifiedBatch(repoRoot, relPaths, options = {}) {
+  const maxCommits = boundedPositiveInteger(options.maxCommits, DEFAULT_GIT_METADATA_MAX_COMMITS, 'maxCommits');
+  const maxBuffer = boundedPositiveInteger(options.maxBuffer, DEFAULT_GIT_METADATA_MAX_BUFFER, 'maxBuffer');
+  const maxPathsPerBatch = boundedPositiveInteger(options.maxPathsPerBatch, DEFAULT_GIT_METADATA_PATH_BATCH, 'maxPathsPerBatch');
+  const paths = [...new Set(relPaths ?? [])];
+  assertSafeGitPaths(paths);
+  if (paths.length === 0) return { dates: new Map(), complete: true, reason: null };
+
+  const dates = new Map();
+  let reason = null;
+  const revisions = spawnSync('git', ['rev-list', `--max-count=${maxCommits + 1}`, 'HEAD'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    maxBuffer,
+  });
+  if (revisions.error?.code === 'ENOBUFS') {
+    reason = 'output-limit';
+  } else if (revisions.error || revisions.status !== 0) {
+    if (unavailableGitHistory(revisions)) return { dates, complete: true, reason: null };
+    return { dates, complete: false, reason: 'git-error' };
+  }
+  const commits = String(revisions.stdout ?? '')
+    .split('\n')
+    .filter(line => /^[0-9a-f]{40,64}$/i.test(line))
+    .slice(0, maxCommits);
+  if (commits.length === 0) return { dates, complete: reason === null, reason };
+  if (!reason && String(revisions.stdout ?? '').trim().split('\n').length > maxCommits) {
+    reason = 'commit-limit';
+  }
+
+  for (let offset = 0; offset < paths.length; offset += maxPathsPerBatch) {
+    const batch = paths.slice(offset, offset + maxPathsPerBatch);
+    const result = spawnSync('git', [
+      'diff-tree', '--stdin', '--root', '-r', '-z', '--format=%x00dotmd:git-metadata:commit%x00%aI%x00', '--name-only', '--diff-filter=ACDMR', '--', ...batch,
+    ], { cwd: repoRoot, encoding: 'utf8', input: commits.join('\n') + '\n', maxBuffer });
+    parseGitMetadataOutput(result.stdout, dates, new Set(batch));
+
+    if (result.error?.code === 'ENOBUFS') {
+      reason = 'output-limit';
+    } else if (result.error || result.status !== 0) {
+      reason = reason ?? 'git-error';
+    }
+  }
+
+  return { dates, complete: reason === null, reason };
 }
 
 function parseNullPaths(result) {

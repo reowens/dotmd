@@ -6,6 +6,7 @@ import { summarizeDocBody } from './ai.mjs';
 import { bold, red, yellow, green, dim } from './color.mjs';
 import { categorizeWarnings } from './check-collapse.mjs';
 import { buildCoordinationIndex, isRoadmapHub } from './runlist.mjs';
+import { resolveStatusMetadata, statusMetadataFor } from './status-metadata.mjs';
 
 // Render `currentState` with an `(auto)` prefix when the value was body-scraped
 // rather than read from frontmatter. Lets a reader see at a glance which docs
@@ -355,11 +356,16 @@ export function renderBriefing(index, config) {
     // headline plan count entirely (they get their own `N runlists · dotmd
     // runlists` pointer line below). The breakdown is leaf statuses only and sums
     // back to the leaf count, so "N live plans" means N things to actually work on.
-    const counts = Object.entries(bySt).map(([s, n]) => `${n} ${s}`).join(', ');
+    const planStatusOrder = (resolveStatusMetadata(config).byType.plan ?? []).map(item => item.name);
+    const orderedStatuses = [
+      ...planStatusOrder.filter(status => bySt[status]),
+      ...Object.keys(bySt).filter(status => !planStatusOrder.includes(status)).sort(),
+    ];
+    const counts = orderedStatuses.map(status => `${bySt[status]} ${status}`).join(', ');
     const closedCount = plans.length - live.length;
     const closedPart = closedCount ? ` (${closedCount} archived)` : '';
     lines.push(liveLeaves ? `${liveLeaves} live plans${closedPart}: ${counts}` : `0 live plans${closedPart}`);
-    const show = plans.filter(p => (p.status === 'in-session' || p.status === 'active') && !isHub(p));
+    const show = plans.filter(p => statusMetadataFor(config, 'plan', p.status)?.context === 'expanded' && !isHub(p));
     for (const p of show) {
       const next = p.nextStep ? `next: ${p.nextStep}` : '(no next step)';
       lines.push(`  > ${path.basename(p.path, '.md')} (${p.status}) ${next}`);
@@ -385,7 +391,7 @@ export function renderBriefing(index, config) {
   if (untyped.length) parts.push(`${untyped.length} untyped`);
   if (parts.length) lines.push(parts.join(' | '));
 
-  const stale = index.docs.filter(d => d.isStale && !config.lifecycle.skipStaleFor.has(d.status)).length;
+  const stale = index.docs.filter(d => d.isStale && !statusMetadataFor(config, d.type, d.status)?.skipStale).length;
   // Append a hint when errors are present — otherwise the user sees `Errors: 1`
   // with no clue what or where. `dotmd check` is the canonical detail view.
   const errorCount = index.errors.length;

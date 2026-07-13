@@ -13,6 +13,8 @@ npx dotmd-cli init          # try it without installing — scaffold a repo firs
 # requires Node.js >= 20
 ```
 
+The CLI runtime supports Linux, macOS, and Windows. Maintainer release automation (`npm version` / `npm run release:resume`) is POSIX-only because it requires Bash and POSIX command-line tools; publishing still produces the same cross-platform Node package.
+
 ### Claude Code plugin (recommended)
 
 If you drive dotmd from Claude Code, install the **dotmd plugin**. It teaches every session and subagent the dotmd workflow and guards the wrong-moves agents keep making (committing session-local prompts, `cat`-ing prompts instead of consuming them, hand-editing `status:`):

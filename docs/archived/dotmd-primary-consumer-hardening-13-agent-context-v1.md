@@ -1,9 +1,9 @@
 ---
 type: plan
-status: planned
+status: archived
 created: 2026-07-10T06:00:55Z
-updated: 2026-07-10T06:00:55Z
-parent_plan: dotmd-primary-consumer-hardening.md
+updated: 2026-07-13T18:35:04Z
+parent_plan: ../plans/dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
   - "> ../dotmd-primary-consumer-audit.md"
@@ -13,7 +13,7 @@ next_step: Extract resolved status metadata into a shared module, then define an
 
 # Agent Context V1
 
-> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
 
 ## Problem
 
@@ -50,7 +50,17 @@ Agent-facing state is reconstructed separately in statuses, presets, HUD, compac
 - Human and JSON card offsets land exactly on the reported heading.
 - Builder execution leaves index and repository byte-identical.
 
+## Closeout
+
+- Outcomes: effective status behavior is shared and type-aware; Agent Context V1 is versioned, scoped, deterministic, bounded, and reused by both compact entry points.
+- Agent surfaces: HUD and prompt pickup honor configured expanded statuses, SessionStart/SubagentStart print bounded plan vocabularies, and briefing focus follows configured semantics.
+- Coordinates: pickup-card and body-search lines are full-file 1-indexed values across LF, CRLF, frontmatter, and no-frontmatter documents.
+- Verification: the full 1,583-test suite passes; passive agent-context calls leave repository and external state byte-identical.
+- Deferrals: bounded git-history metadata remains in `dotmd-primary-consumer-hardening-14-bounded-git-metadata.md`.
+
 
 ## Version History
 
+- **2026-07-13T18:35:04Z** Archived — Shipped shared status metadata, Agent Context V1, dynamic HUD/prompt semantics, passive machine context, and absolute pickup coordinates; all 1,583 tests pass.
+- **2026-07-13T18:08:47Z** Started (planned → in-session).
 - **2026-07-10T06:00:55Z** Created (runlist child of dotmd-primary-consumer-hardening).

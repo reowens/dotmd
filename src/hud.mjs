@@ -1,13 +1,15 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extractFrontmatter, parseSimpleFrontmatter } from './frontmatter.mjs';
-import { asString, toRepoPath, currentSessionId } from './util.mjs';
+import { currentSessionId, isArchivedPath } from './util.mjs';
 import { dim, yellow } from './color.mjs';
 import { buildIndex } from './index.mjs';
 import { readJournalEntries, journalFilePath, readMisuseEntries } from './journal.mjs';
 import { compareVersions } from './update.mjs';
 import { findOwnedPlan } from './baton.mjs';
+import { actionablePromptStatuses, comparePromptDocs, resolveStatusMetadata } from './status-metadata.mjs';
+
+export { actionablePromptStatuses } from './status-metadata.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
@@ -44,51 +46,14 @@ export function detectVersionDrift(env = process.env) {
 // for stripped-down configs). This means a user who customizes
 // types.prompt.statuses to add e.g. `urgent: { context: 'expanded' }` gets that
 // status surfaced too, without needing a code change.
-export function actionablePromptStatuses(config) {
-  const promptCtx = config.typeContextConfig?.get('prompt');
-  const expanded = promptCtx?.expanded;
-  if (Array.isArray(expanded) && expanded.length > 0) return new Set(expanded);
-  return new Set(['pending']);
-}
-
 // Returns repo paths, oldest-created first — the same order no-arg `dotmd use`
 // consumes them, so prompts[0] is always "the one you'd pick up next".
-function findActionablePrompts(config) {
-  const roots = config.docsRoots || (config.docsRoot ? [config.docsRoot] : []);
-  const archiveDir = config.archiveDir || 'archived';
+function findActionablePrompts(config, index) {
   const actionable = actionablePromptStatuses(config);
-  const found = [];
-  const seen = new Set();
-
-  for (const root of roots) {
-    // A root may either contain a prompts/ subdir (the common case, e.g. root=docs)
-    // or be the prompts/ dir itself (e.g. root=docs/prompts — see #6).
-    const dir = path.basename(root) === 'prompts' ? root : path.join(root, 'prompts');
-    if (seen.has(dir)) continue;
-    seen.add(dir);
-    if (!existsSync(dir)) continue;
-    let entries;
-    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
-    for (const entry of entries) {
-      if (entry.isDirectory()) continue;
-      if (!entry.name.endsWith('.md')) continue;
-      const filePath = path.join(dir, entry.name);
-      // Skip any nested archived/ collisions just in case
-      if (filePath.includes(`/${archiveDir}/`)) continue;
-      let raw;
-      try { raw = readFileSync(filePath, 'utf8'); } catch { continue; }
-      const { frontmatter } = extractFrontmatter(raw);
-      if (!frontmatter) continue;
-      const fm = parseSimpleFrontmatter(frontmatter);
-      if (asString(fm.type) !== 'prompt') continue;
-      if (!actionable.has(asString(fm.status))) continue;
-      found.push({ path: toRepoPath(filePath, config.repoRoot), created: asString(fm.created) ?? '' });
-    }
-  }
-
-  return found
-    .sort((a, b) => a.created.localeCompare(b.created) || a.path.localeCompare(b.path))
-    .map(p => p.path);
+  return index.docs
+    .filter(doc => doc.type === 'prompt' && actionable.has(doc.status) && !isArchivedPath(doc.path, config))
+    .sort(comparePromptDocs)
+    .map(doc => doc.path);
 }
 
 // F17b: hud reads journal. Three additive sections, gated on
@@ -229,7 +194,7 @@ export function buildMisuseRecap(config, now = Date.now()) {
 }
 
 export function buildHud(config) {
-  const prompts = findActionablePrompts(config);
+  let prompts = [];
   const skippedValidationHooks = ['validate', 'transformDoc', 'formatSnapshot']
     .filter(name => typeof config.hooks?.[name] === 'function');
 
@@ -251,6 +216,7 @@ export function buildHud(config) {
       autoHealIndex: false,
       invokeHooks: false,
     });
+    prompts = findActionablePrompts(config, index);
     builtInErrors = index.errors.length;
     const o = findOwnedPlan(config, index);
     if (o.plan) owned = { path: o.plan.path, title: o.plan.title ?? null, via: o.via };
@@ -288,6 +254,25 @@ const SUBAGENT_PRIMER = [
   'git add/commit a prompt (they are session-local, often gitignored); hand-edit a `status:` field (use `dotmd set`).',
 ].join('\n');
 
+export function buildPlanStatusPrimer(config, { maxChars = 220 } = {}) {
+  const statuses = (resolveStatusMetadata(config).byType.plan ?? []).map(item => item.name);
+  const fallback = 'run `dotmd statuses list --type plan`';
+  if (statuses.length === 0) return `Plan statuses unavailable; ${fallback}.`;
+  const prefix = 'Plan statuses: ';
+  const full = `${prefix}${statuses.join(', ')}`;
+  if (full.length <= maxChars) return full;
+
+  const shown = [];
+  for (const status of statuses) {
+    const omitted = statuses.length - shown.length - 1;
+    const candidate = `${prefix}${[...shown, status].join(', ')}, ... (+${omitted}; ${fallback})`;
+    if (candidate.length > maxChars) break;
+    shown.push(status);
+  }
+  const omitted = statuses.length - shown.length;
+  return `${prefix}${shown.join(', ')}${shown.length ? ', ' : ''}... (+${omitted}; ${fallback})`;
+}
+
 // The plugin's SessionStart/SubagentStart hooks fire in EVERY repo (it's enabled
 // globally), but the primer only helps where dotmd is actually used. Gate on a
 // discovered config: `dotmd init` writes dotmd.config.mjs, so "has a config" is
@@ -310,6 +295,7 @@ export function runHud(argv, config) {
   if (argv.includes('--subagent')) {
     if (!dotmdRepo) return; // silent in repos that don't use dotmd
     process.stdout.write(dim(SUBAGENT_PRIMER) + '\n');
+    process.stdout.write(dim(buildPlanStatusPrimer(config)) + '\n');
     if (drift) process.stdout.write(yellow(drift) + '\n');
     return;
   }
@@ -341,6 +327,7 @@ export function runHud(argv, config) {
   // The misuse recap stays for the same reason: a repeat-offense rule means
   // the primer alone isn't landing, so name the habit to break.
   process.stdout.write(dim('dotmd: plans|briefing  set <status> [<file>]  new <type> <slug>  use [<file>]  archive <file>  baton [<slug>] <@draft|-> (save a resume prompt; releases the in-session plan if any)  (use [no-arg] → oldest pending prompt)') + '\n');
+  process.stdout.write(dim(buildPlanStatusPrimer(config)) + '\n');
   if (hud.owned && hud.owned.via === 'ownership') {
     process.stdout.write(yellow(`[dotmd] in-session (yours): ${hud.owned.path} — continue it; hand off with \`dotmd baton @/tmp/draft.md\` before stopping.`) + '\n');
   }

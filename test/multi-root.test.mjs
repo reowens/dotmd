@@ -132,6 +132,27 @@ describe('multi-root: archive within root', () => {
     ok(!existsSync(path.join(tmpDir, 'docs', 'plans', 'archived', 'mod-b.md')),
       'not archived to plans root');
   });
+
+  it('keeps sibling-prefix roots separate on the host path separator', () => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'dotmd-prefix-root-'));
+    spawnSync('git', ['init'], { cwd: tmpDir });
+    spawnSync('git', ['config', 'user.email', 'test@test.com'], { cwd: tmpDir });
+    spawnSync('git', ['config', 'user.name', 'Test'], { cwd: tmpDir });
+    mkdirSync(path.join(tmpDir, 'docs'), { recursive: true });
+    mkdirSync(path.join(tmpDir, 'docs-extra'), { recursive: true });
+    writeFileSync(path.join(tmpDir, 'dotmd.config.mjs'), `export const root = ['docs', 'docs-extra'];`);
+    const source = path.join(tmpDir, 'docs-extra', 'owned.md');
+    writeFileSync(source, '---\ntype: doc\nstatus: active\nupdated: 2025-01-01\n---\n# Owned\n');
+    spawnSync('git', ['add', '.'], { cwd: tmpDir });
+    spawnSync('git', ['commit', '-m', 'init'], { cwd: tmpDir });
+
+    const result = run(['archive', source]);
+    strictEqual(result.status, 0, `stderr: ${result.stderr}`);
+    ok(existsSync(path.join(tmpDir, 'docs-extra', 'archived', 'owned.md')),
+      'archives under the owning sibling-prefix root');
+    ok(!existsSync(path.join(tmpDir, 'docs', 'archived', 'owned.md')),
+      'does not fall back to the first configured root');
+  });
 });
 
 describe('multi-root: new with --root', () => {

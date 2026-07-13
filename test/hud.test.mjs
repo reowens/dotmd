@@ -66,6 +66,39 @@ describe('dotmd hud', () => {
     ok(/set <status>/.test(r.stdout), `primer should name the set verb; got: ${r.stdout}`);
     ok(/new <type>/.test(r.stdout), `primer should name the new verb; got: ${r.stdout}`);
     ok(/\buse\b/.test(r.stdout), `primer should name the use verb; got: ${r.stdout}`);
+    ok(r.stdout.includes('Plan statuses: in-session, active, planned'), `primer should include configured plan vocabulary; got: ${r.stdout}`);
+  });
+
+  it('prints bounded custom status vocabulary for sessions and subagents', () => {
+    setupProject();
+    const statuses = Array.from({ length: 20 }, (_, i) => `status-${String(i).padStart(2, '0')}`);
+    writeFileSync(path.join(tmpDir, 'dotmd.config.mjs'), `
+      export const root = 'docs';
+      export const types = { plan: { statuses: ${JSON.stringify(statuses)}, context: { expanded: ['status-00'], listed: [], counted: ${JSON.stringify(statuses.slice(1))} } } };
+    `);
+    const session = runCli(['hud']);
+    strictEqual(session.status, 0, session.stderr);
+    ok(session.stdout.includes('status-00'), session.stdout);
+    ok(session.stdout.includes('dotmd statuses list --type plan'), session.stdout);
+    ok(/\(\+\d+;/.test(session.stdout), session.stdout);
+
+    const subagent = runCli(['hud', '--subagent']);
+    strictEqual(subagent.status, 0, subagent.stderr);
+    ok(subagent.stdout.includes('status-00'), subagent.stdout);
+    ok(subagent.stdout.includes('dotmd statuses list --type plan'), subagent.stdout);
+  });
+
+  it('surfaces custom expanded prompt statuses', () => {
+    const docsDir = setupProject();
+    writeFileSync(path.join(tmpDir, 'dotmd.config.mjs'), `
+      export const root = 'docs';
+      export const types = { prompt: { statuses: { urgent: { context: 'expanded' }, held: { context: 'listed' }, archived: { context: 'counted', terminal: true, archive: true } } } };
+    `);
+    mkdirSync(path.join(docsDir, 'prompts'), { recursive: true });
+    writeDoc(docsDir, 'prompts/urgent.md', 'type: prompt\nstatus: urgent\ncreated: 2025-01-01', 'act now\n');
+    const result = runCli(['hud']);
+    strictEqual(result.status, 0, result.stderr);
+    ok(result.stdout.includes('docs/prompts/urgent.md'), result.stdout);
   });
 
   it('surfaces pending prompts as an actionable instruction; passive state stays suppressed', () => {

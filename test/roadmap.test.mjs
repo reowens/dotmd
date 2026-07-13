@@ -252,6 +252,24 @@ describe('roadmap views + integration (CLI)', () => {
     match(r.stdout, /in-session/);
   });
 
+  it('dotmd roadmap <hub> next normalizes to the same mutating form', () => {
+    setupRoadmap();
+    const r = runCmd(['roadmap', 'master-roadmap', 'next']);
+    strictEqual(r.status, 0, r.stderr);
+    match(r.stdout, /loose-plan/);
+    match(r.stdout, /in-session/);
+  });
+
+  it('rejects unknown flags and extra roadmap positionals before dispatch', () => {
+    setupRoadmap();
+    const flag = runCmd(['roadmap', '--wat']);
+    strictEqual(flag.status, 1);
+    match(flag.stderr, /Unknown flag/);
+    const extra = runCmd(['roadmap', 'master-roadmap', 'extra']);
+    strictEqual(extra.status, 1);
+    match(extra.stderr, /Usage:/);
+  });
+
   it('dotmd roadmap next skips a leaf busy in another session', () => {
     const plans = setupRoadmap();
     const master = path.join(plans, 'master-roadmap.md');

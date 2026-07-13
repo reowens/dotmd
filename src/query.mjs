@@ -85,7 +85,7 @@ export function runQuery(index, argv, config, opts = {}) {
   if (filters.body && !filters.keyword) {
     die('`--body` extends a keyword search into document bodies — pass `--keyword <term>` (or use `dotmd grep <term>`).');
   }
-  const docs = filterDocs(index.docs, filters, config);
+  const docs = filterDocs(index.docs, filters, config, opts.gitMetadataOptions);
   const summaryPreviewSkipped = filters.summarize && config._execution?.suppressSideEffects;
 
   if (filters.json) {
@@ -285,7 +285,7 @@ export function parseQueryArgs(argv) {
   return filters;
 }
 
-export function filterDocs(docs, filters, config) {
+export function filterDocs(docs, filters, config, gitMetadataOptions) {
   let result = [...docs];
 
   if (filters.types?.length) result = result.filter(d => filters.types.includes(d.type));
@@ -326,13 +326,17 @@ export function filterDocs(docs, filters, config) {
   if (filters.updatedSince) result = result.filter(d => d.updated && d.updated >= filters.updatedSince);
 
   if (filters.git) {
-    const gitDates = getGitLastModifiedBatch(config.repoRoot);
+    const gitMetadata = getGitLastModifiedBatch(config.repoRoot, result.map(doc => doc.path), gitMetadataOptions);
+    const gitDates = gitMetadata.dates;
     for (const doc of result) {
       const gitDate = gitDates.get(doc.path) ?? null;
       if (gitDate) {
         doc.daysSinceUpdate = computeDaysSinceUpdate(gitDate);
-        doc.isStale = computeIsStale(doc.status, gitDate, config);
+        doc.isStale = computeIsStale(doc.status, gitDate, config, doc.type);
       }
+    }
+    if (!gitMetadata.complete) {
+      warn(`Git metadata is incomplete (${gitMetadata.reason}); query results use known dates only.`);
     }
   }
 
@@ -386,18 +390,16 @@ function scanBodyForKeyword(doc, needle, config) {
     warn(`Could not read ${doc.path}: ${err.message}`);
     return [];
   }
-  const { body } = extractFrontmatter(raw);
+  const { body, bodyLineOffset } = extractFrontmatter(raw);
   if (!body || !body.toLowerCase().includes(needle)) return [];
 
-  // body is a suffix of raw — the slice before it is the frontmatter block.
-  const bodyStartLine = raw.slice(0, raw.length - body.length).split('\n').length;
   const lines = body.split('\n');
   const matches = [];
   for (let i = 0; i < lines.length && matches.length < MAX_BODY_MATCHES; i++) {
     const text = lines[i].trim();
     const at = text.toLowerCase().indexOf(needle);
     if (at === -1) continue;
-    matches.push({ line: bodyStartLine + i, text: excerptAround(text, at, needle.length) });
+    matches.push({ line: bodyLineOffset + i + 1, text: excerptAround(text, at, needle.length) });
   }
   return matches;
 }

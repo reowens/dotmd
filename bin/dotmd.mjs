@@ -7,19 +7,19 @@ import { resolveConfig } from '../src/config.mjs';
 import { die, warn, levenshtein, isArchivedPath, toRepoPath } from '../src/util.mjs';
 import { recordCliInvocation, recordGlobalError, sanitizeTelemetryArgv } from '../src/journal.mjs';
 import { findRepeatFailureHint } from '../src/hints.mjs';
-import { KNOWN_COMMANDS, commandPolicy } from '../src/commands.mjs';
+import {
+  KNOWN_COMMANDS,
+  canonicalCommand,
+  commandOwnsOption,
+  commandPolicy,
+  commandUsage,
+  validateCommandArgs,
+} from '../src/commands.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pkg = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
 
-const QUERY_FLAGS = new Set([
-  '--type', '--status', '--keyword', '--body', '--owner', '--surface', '--module',
-  '--domain', '--audience', '--execution-mode', '--updated-since', '--limit',
-  '--sort', '--group', '--all', '--include-archived', '--exclude-archived',
-  '--stale', '--has-next-step', '--has-blockers', '--checklist-open', '--json',
-  '--git', '--summarize', '--summarize-limit', '--model',
-]);
 const QUERY_VALUE_FLAGS = new Set([
   '--type', '--status', '--keyword', '--owner', '--surface', '--module',
   '--domain', '--audience', '--execution-mode', '--updated-since', '--limit',
@@ -35,45 +35,6 @@ function requireCommandPolicy(command, policy) {
     die(`Unknown command: ${command}\n\nDid you mean \`dotmd ${matches[0].cmd}\`?`);
   }
   die(`Unknown command: ${command}\n\nRun \`dotmd --help\` for available commands.`);
-}
-
-const FLAG_SPECS = {
-  plans: { flags: QUERY_FLAGS, values: QUERY_VALUE_FLAGS, subcommands: new Set(['status']) },
-  query: { flags: QUERY_FLAGS, values: QUERY_VALUE_FLAGS },
-  grep: { flags: QUERY_FLAGS, values: QUERY_VALUE_FLAGS },
-  stale: { flags: QUERY_FLAGS, values: QUERY_VALUE_FLAGS },
-  actionable: { flags: QUERY_FLAGS, values: QUERY_VALUE_FLAGS },
-  list: { flags: new Set(['--json', '--verbose']), values: new Set() },
-  briefing: { flags: new Set(['--json']), values: new Set() },
-  context: { flags: new Set(['--json', '--compact', '--summarize', '--model']), values: new Set(['--model']) },
-  'agent-context': { flags: new Set(['--json']), values: new Set() },
-  hud: { flags: new Set(['--json', '--subagent']), values: new Set() },
-  // '-' is the stdin marker (a positional, not a flag) — listed so validation lets it through.
-  baton: { flags: new Set(['--status', '--note', '--body', '--message', '--force', '--json', '--dry-run', '-n', '-']), values: new Set(['--status', '--note', '--body', '--message']) },
-  guard: { flags: new Set(), values: new Set() },
-  misuse: { flags: new Set(['--json', '--tail', '--by-rule', '--repo']), values: new Set(['--tail', '--repo']) },
-  update: { flags: new Set(['--check', '--cli-only', '--plugin-only']), values: new Set() },
-  check: { flags: new Set(['--fix', '--errors-only', '--no-collapse', '--json', '--verbose']), values: new Set() },
-  doctor: { flags: new Set(['--apply', '--yes', '--dry-run', '-n', '--statuses', '--migrate-template', '--migrate-prompts', '--frontmatter-fix', '--project', '--json', '--include-archived']), values: new Set() },
-  runlist: { flags: new Set(['--json', '--full', '--no-index', '--show-files', '--clear-parent', '--before', '--after']), values: new Set(['--before', '--after']), subcommands: new Set(['next', 'add', 'remove', 'reorder']) },
-  runlists: { flags: new Set(['--json', '--limit', '--sort']), values: new Set(['--limit', '--sort']) },
-  prompts: {
-    flags: new Set(['--json', '--status', '--include-archived', '--sort', '--limit', '--all', '--no-index', '--show-files', '--body', '--message', '--title']),
-    values: new Set(['--status', '--sort', '--limit', '--body', '--message', '--title']),
-    subcommands: new Set(['list', 'next', 'use', 'resume', 'show', 'peek', 'archive', 'new', 'hold', 'unhold', 'shelve', 'unshelve', 'status']),
-  },
-};
-
-function validateKnownFlags(command, argv, config) {
-  const spec = FLAG_SPECS[command] ?? (config?.presets?.[command] ? { flags: QUERY_FLAGS, values: QUERY_VALUE_FLAGS } : null);
-  if (!spec) return;
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (spec.subcommands?.has(arg)) continue;
-    if (!arg.startsWith('-')) continue;
-    if (!spec.flags.has(arg)) die(`Unknown flag for \`dotmd ${command}\`: ${arg}`);
-    if (spec.values.has(arg)) i += 1;
-  }
 }
 
 function resolveExistingPath(input, config) {
@@ -1352,6 +1313,58 @@ Pass file paths as positional args to scope to those files only; otherwise
 the whole docs tree is scanned.`,
 };
 
+const GLOBAL_VALUE_OPTIONS = new Set(['--config', '--root', '--type']);
+const GLOBAL_BOOLEAN_OPTIONS = new Set(['--dry-run', '-n', '--verbose']);
+
+function splitGlobalArgs(args) {
+  let commandIndex = -1;
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (GLOBAL_VALUE_OPTIONS.has(arg)) {
+      if (args[i + 1] === undefined || args[i + 1].startsWith('-')) die(`Missing value for global option \`${arg}\`.`);
+      i += 1;
+      continue;
+    }
+    if (GLOBAL_BOOLEAN_OPTIONS.has(arg)) continue;
+    commandIndex = i;
+    break;
+  }
+
+  const command = canonicalCommand(commandIndex === -1 ? 'list' : args[commandIndex]);
+  const rest = [];
+  let explicitConfig = null;
+  let rootArg = null;
+  let typeArg = null;
+  let dryRun = false;
+  let verbose = false;
+
+  for (let i = 0; i < args.length; i += 1) {
+    if (i === commandIndex) continue;
+    const arg = args[i];
+    const beforeCommand = commandIndex === -1 || i < commandIndex;
+    if (GLOBAL_VALUE_OPTIONS.has(arg)) {
+      const local = !beforeCommand && commandOwnsOption(command, arg);
+      const next = args[i + 1];
+      if (next === undefined || next.startsWith('-')) die(`Missing value for \`${arg}\`.`);
+      if (local) rest.push(arg, next);
+      else if (arg === '--config') explicitConfig = next;
+      else if (arg === '--root') rootArg = next;
+      else typeArg = next;
+      i += 1;
+      continue;
+    }
+    if (arg === '--dry-run' || arg === '-n') { dryRun = true; continue; }
+    if (arg === '--verbose') {
+      if (!beforeCommand && commandOwnsOption(command, arg)) rest.push(arg);
+      else verbose = true;
+      continue;
+    }
+    rest.push(arg);
+  }
+
+  return { command, rest, explicitConfig, rootArg, typeArg, dryRun, verbose };
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -1361,27 +1374,11 @@ async function main() {
     return;
   }
 
-  // Normalize global flags from ANYWHERE in argv (before OR after the command)
-  // so `dotmd --config x list` resolves `list` as the command, not `--config`.
-  // Value flags (--config/--root/--type) consume the next token; the booleans
-  // (--dry-run/-n/--verbose) are read positionally below. --help/-h stay in the
-  // leftover stream and are handled by the blocks just below.
-  let explicitConfig = null;
-  let rootArg = null;
-  let typeArg = null;
-  const normalized = [];
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a === '--config' && args[i + 1]) { explicitConfig = args[++i]; continue; }
-    if (a === '--type' && args[i + 1]) { typeArg = args[++i]; continue; }
-    if (a === '--root' && args[i + 1]) { rootArg = args[++i]; continue; }
-    if (a === '--dry-run' || a === '-n' || a === '--verbose') continue;
-    normalized.push(a);
-  }
-  const dryRun = args.includes('--dry-run') || args.includes('-n');
-  const verbose = args.includes('--verbose');
-  let command = normalized[0] ?? 'list';
-  const restArgs = normalized.slice(1);
+  // Before-command options are global. After the command, a schema-declared
+  // local option wins; otherwise the historical anywhere-global form remains.
+  const parsed = splitGlobalArgs(args);
+  let { command, explicitConfig, rootArg, typeArg, dryRun, verbose } = parsed;
+  let restArgs = parsed.rest;
 
   // Reconstruct the active global flags for proxy commands (e.g. `watch`) that
   // re-invoke the CLI in a child process and must propagate them through.
@@ -1436,13 +1433,6 @@ async function main() {
     return;
   }
 
-  // Singular-form alias for the prompts subcommand namespace. Trivial
-  // no-collision collapse — `prompt` was previously "unknown command", now
-  // routes everywhere `prompts` does (incl. per-command --help below, and the
-  // subcommand dispatch at the `prompts` branch in the chain). The other
-  // singular/plural pairs (`plan`/`plans`, `module`/`modules`,
-  // `status`/`statuses`) are deliberately kept distinct — see F20 plan.
-  if (command === 'prompt') command = 'prompts';
   const dispatchPolicy = commandPolicy(command);
   _resolvedCommand = command;
   const doctorSubMode = command === 'doctor' && (
@@ -1452,16 +1442,20 @@ async function main() {
   );
   const doctorExplicitApply = args.includes('--apply') || args.includes('--yes');
   const effectiveDryRun = dryRun || (command === 'doctor' && !doctorSubMode && !doctorExplicitApply);
-  _suppressObservability = effectiveDryRun || command === 'hud';
+  const passiveMachineContext = command === 'agent-context'
+    || (command === 'context' && args.includes('--json') && args.includes('--compact'));
+  _suppressObservability = effectiveDryRun || command === 'hud' || passiveMachineContext;
 
   // Per-command help
   if (args.includes('--help') || args.includes('-h')) {
-    process.stdout.write(`${HELP[command] ?? HELP._main}\n`);
+    requireCommandPolicy(command, dispatchPolicy);
+    process.stdout.write(`${HELP[command] ?? commandUsage(command)}\n`);
     return;
   }
 
   if (command === 'completions') {
     requireCommandPolicy(command, dispatchPolicy);
+    try { restArgs = validateCommandArgs(command, restArgs); } catch (err) { die(err.message); }
     const { runCompletions } = await import('../src/completions.mjs');
     runCompletions(restArgs);
     return;
@@ -1478,15 +1472,21 @@ async function main() {
     throw err;
   }
   _resolvedConfig = config;
-  const suppressSideEffects = effectiveDryRun || command === 'hud';
+  const suppressSideEffects = effectiveDryRun || command === 'hud' || passiveMachineContext;
   Object.defineProperty(config, '_execution', {
-    value: { dryRun, passive: command === 'hud', suppressSideEffects },
+    value: { dryRun, passive: command === 'hud' || passiveMachineContext, suppressSideEffects },
     enumerable: false,
   });
   // Unknown names may still be user-defined query presets. Every built-in
   // dispatcher branch, including mutators above the shared index path, must be
   // present in the centralized command policy registry.
   if (!config.presets[command]) requireCommandPolicy(command, dispatchPolicy);
+
+  try {
+    restArgs = validateCommandArgs(command, restArgs, { preset: Boolean(config.presets[command]) });
+  } catch (err) {
+    die(err.message);
+  }
 
   // Init — runInit re-resolves the config from disk internally (after any
   // starter-config write), so we don't need to pre-pass it.
@@ -1522,9 +1522,25 @@ async function main() {
     process.stderr.write(`Repo root: ${config.repoRoot}\n`);
   }
 
-  validateKnownFlags(command, restArgs, config);
-
   // Preset aliases (user config can override built-in commands below)
+  if ((command === 'stale' || command === 'actionable') && !config.configuredPresetNames.has(command)) {
+    const { buildIndex } = await import('../src/index.mjs');
+    const { runQuery } = await import('../src/query.mjs');
+    const { statusMetadataFor } = await import('../src/status-metadata.mjs');
+    const index = buildIndex(config);
+    applyIndexFilters(index);
+    const docs = index.docs.filter(doc => {
+      const metadata = statusMetadataFor(config, doc.type, doc.status);
+      if (command === 'stale') return doc.isStale && !metadata?.skipStale;
+      return metadata?.context === 'expanded'
+        && doc.hasNextStep
+        && !metadata.terminal
+        && !metadata.archive
+        && !isArchivedPath(doc.path, config);
+    });
+    runQuery({ ...index, docs }, ['--sort', 'updated', '--all', ...restArgs], config, { preset: command, type: typeArg, root: rootArg });
+    return;
+  }
   if (config.presets[command]) {
     const { buildIndex } = await import('../src/index.mjs');
     const { runQuery } = await import('../src/query.mjs');
@@ -1688,6 +1704,7 @@ async function main() {
   const AUTO_HEAL_INDEX_COMMANDS = new Set(['check']);
   const index = buildIndex(config, {
     autoHealIndex: AUTO_HEAL_INDEX_COMMANDS.has(command) && !checkHasPathScope && !dryRun,
+    invokeHooks: !suppressSideEffects,
   });
 
   applyIndexFilters(index);
@@ -1874,60 +1891,24 @@ async function main() {
     return;
   }
 
-  function compactDoc(d) {
-    return {
-      path: d.path,
-      title: d.title,
-      status: d.status,
-      type: d.type,
-      nextStep: d.nextStep ?? null,
-      blockers: d.blockers ?? [],
-      daysSinceUpdate: d.daysSinceUpdate ?? null,
-    };
-  }
-
-  function buildCompactAgentContext(idx) {
-    const activeStatuses = new Set(['in-session', 'active', 'ready', 'planned', 'awaiting', 'blocked']);
-    const active = idx.docs.filter(d => d.type === 'plan' && activeStatuses.has(d.status));
-    const stale = idx.docs.filter(d => d.isStale && !config.lifecycle.skipStaleFor.has(d.status));
-    const awaiting = idx.docs.filter(d => d.status === 'awaiting');
-    const blocked = idx.docs.filter(d => d.status === 'blocked' || d.blockers?.length);
-    const pendingPrompts = idx.docs
-      .filter(d => d.type === 'prompt' && d.status === 'pending' && !isArchivedPath(d.path, config))
-      .sort((a, b) => (a.created ?? '').localeCompare(b.created ?? '') || (a.updated ?? '').localeCompare(b.updated ?? ''));
-    return {
-      generatedAt: new Date().toISOString(),
-      countsByStatus: idx.countsByStatus,
-      countsByType: idx.countsByType,
-      errors: {
-        count: idx.errors.length,
-        items: idx.errors.slice(0, 10).map(e => ({ path: e.path, message: e.message })),
-      },
-      warnings: { count: idx.warnings.length },
-      prompts: {
-        pending: pendingPrompts.length,
-        next: pendingPrompts[0] ? compactDoc(pendingPrompts[0]) : null,
-      },
-      plans: {
-        active: active.slice(0, 12).map(compactDoc),
-        awaiting: awaiting.slice(0, 8).map(compactDoc),
-        blocked: blocked.slice(0, 8).map(compactDoc),
-        stale: stale.slice(0, 12).map(compactDoc),
-      },
-    };
-  }
-
   if (command === 'agent-context') {
-    process.stdout.write(JSON.stringify(buildCompactAgentContext(index), null, 2) + '\n');
+    const { buildAgentContext } = await import('../src/agent-context.mjs');
+    const skippedHooks = ['validate', 'transformDoc', 'formatSnapshot'].filter(name => typeof config.hooks?.[name] === 'function');
+    process.stdout.write(JSON.stringify(buildAgentContext(index, config, {
+      roots: rootArg ? [rootArg] : null,
+      types: typeArg ? typeArg.split(',').map(value => value.trim()).filter(Boolean) : null,
+      skippedHooks,
+    }), null, 2) + '\n');
     return;
   }
 
   if (command === 'briefing') {
     if (args.includes('--json')) {
+      const { statusMetadataFor } = await import('../src/status-metadata.mjs');
       const plans = index.docs.filter(d => d.type === 'plan');
       const docs = index.docs.filter(d => d.type === 'doc');
       const research = index.docs.filter(d => d.type === 'research');
-      const stale = index.docs.filter(d => d.isStale && !config.lifecycle.skipStaleFor.has(d.status)).length;
+      const stale = index.docs.filter(d => d.isStale && !statusMetadataFor(config, d.type, d.status)?.skipStale).length;
       // Coordination hubs are runlists, not actionable plans — split them out of
       // inSession/active into their own `runlists` array so the JSON mirrors the
       // rendered briefing. Empty on repos with no coordination hubs.
@@ -1937,7 +1918,7 @@ async function main() {
       const closedStatuses = new Set([...config.lifecycle.archiveStatuses, ...config.lifecycle.terminalStatuses]);
       const isLiveHub = (d) => isHub(d) && !closedStatuses.has(d.status) && !isArchivedPath(d.path, config);
       process.stdout.write(JSON.stringify({
-        plans: { total: plans.length, inSession: plans.filter(d => d.status === 'in-session' && !isHub(d)).map(d => ({ path: d.path, title: d.title, nextStep: d.nextStep })), active: plans.filter(d => d.status === 'active' && !isHub(d)).map(d => ({ path: d.path, title: d.title, nextStep: d.nextStep })), runlists: plans.filter(isLiveHub).map(d => ({ path: d.path, title: d.title, status: d.status, childCount: coordination.get(d.path)?.childCount ?? 0 })) },
+        plans: { total: plans.length, inSession: plans.filter(d => d.status === 'in-session' && !isHub(d)).map(d => ({ path: d.path, title: d.title, nextStep: d.nextStep })), active: plans.filter(d => d.status === 'active' && !isHub(d)).map(d => ({ path: d.path, title: d.title, nextStep: d.nextStep })), focus: plans.filter(d => statusMetadataFor(config, 'plan', d.status)?.context === 'expanded' && !isHub(d)).map(d => ({ path: d.path, title: d.title, status: d.status, nextStep: d.nextStep })), runlists: plans.filter(isLiveHub).map(d => ({ path: d.path, title: d.title, status: d.status, childCount: coordination.get(d.path)?.childCount ?? 0 })) },
         docs: { total: docs.length, active: docs.filter(d => !config.lifecycle.terminalStatuses.has(d.status)).length },
         research: { total: research.length, active: research.filter(d => d.status === 'active').length },
         stale, errorCount: index.errors.length, warningCount: index.warnings.length,
@@ -1956,7 +1937,13 @@ async function main() {
 
     if (args.includes('--json')) {
       if (compact) {
-        process.stdout.write(JSON.stringify(buildCompactAgentContext(index), null, 2) + '\n');
+        const { buildAgentContext } = await import('../src/agent-context.mjs');
+        const skippedHooks = ['validate', 'transformDoc', 'formatSnapshot'].filter(name => typeof config.hooks?.[name] === 'function');
+        process.stdout.write(JSON.stringify(buildAgentContext(index, config, {
+          roots: rootArg ? [rootArg] : null,
+          types: typeArg ? typeArg.split(',').map(value => value.trim()).filter(Boolean) : null,
+          skippedHooks,
+        }), null, 2) + '\n');
         return;
       }
       const byStatus = {};
@@ -1991,7 +1978,8 @@ async function main() {
           } catch { /* skip */ }
         }
       }
-      const stale = index.docs.filter(d => d.isStale && !config.lifecycle.skipStaleFor.has(d.status));
+      const { statusMetadataFor } = await import('../src/status-metadata.mjs');
+      const stale = index.docs.filter(d => d.isStale && !statusMetadataFor(config, d.type, d.status)?.skipStale);
       process.stdout.write(JSON.stringify({
         generatedAt: new Date().toISOString(),
         ...(summarize && config._execution?.suppressSideEffects

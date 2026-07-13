@@ -94,6 +94,8 @@ describe('passive and dry-run whole-tree invariant', () => {
       ['new', 'explosive', 'preview', '--dry-run'],
       ['summary', 'docs/doc.md', '--json', '--dry-run'],
       ['context', '--json', '--summarize', '--dry-run'],
+      ['agent-context'],
+      ['context', '--json', '--compact'],
       ['hud'],
       ['hud', '--json'],
     ];

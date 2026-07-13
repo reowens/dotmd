@@ -6,7 +6,7 @@ allowed-tools: "Bash(dotmd:*), Read"
 
 # dotmd workflow
 
-This repo's plans, reference docs, and saved prompts are managed by the **dotmd** CLI (markdown + YAML frontmatter). Always drive them through `dotmd` — never hand-edit frontmatter, never read prompts with the file tools, never commit session-local prompts. The session-start hook prints the live verb sheet and this repo's valid status vocabulary; run `dotmd briefing` any time to refresh it.
+This repo's plans, reference docs, and saved prompts are managed by the **dotmd** CLI (markdown + YAML frontmatter). Always drive them through `dotmd` — never hand-edit frontmatter, never read prompts with the file tools, never commit session-local prompts. The session-start hook prints the live verb sheet and a bounded plan-status vocabulary; if it truncates, use the printed `dotmd statuses list --type plan` fallback. Run `dotmd briefing` any time to refresh live state.
 
 **Workflow contract** — the irreducible verbs at a glance; the sections below expand each one.
 
@@ -39,7 +39,7 @@ Add `--note "why"` to any `set`/`archive` to append the reason to `## Version Hi
 - Stuck on a human decision/input → `dotmd set awaiting <file>`.
 - Blocked on an external arrival you can't speed up → `dotmd set blocked <file>`.
 
-Valid statuses are type-aware and project-specific — the SessionStart primer lists this repo's set, or run `dotmd statuses list`.
+Valid statuses are type-aware and project-specific — the SessionStart primer lists a bounded plan set and points to `dotmd statuses list --type plan` when truncated.
 
 ## Creating documents
 

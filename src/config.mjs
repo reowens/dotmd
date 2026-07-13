@@ -556,6 +556,7 @@ export async function resolveConfig(cwd, explicitConfigPath) {
     display: config.display,
     referenceFields: config.referenceFields,
     presets: config.presets,
+    configuredPresetNames: new Set(Object.keys(userConfig.presets ?? {})),
     journal: config.journal === true,
     guard: { deny: config.guard?.deny !== false },
     hooks,

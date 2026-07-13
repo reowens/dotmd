@@ -1,8 +1,8 @@
 ---
 type: plan
-status: planned
+status: in-session
 created: 2026-07-10T06:00:55Z
-updated: 2026-07-10T06:00:55Z
+updated: 2026-07-13T21:58:34Z
 parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
@@ -51,4 +51,5 @@ The installed CLI presents as portable Node code, but literal separators, prefix
 
 ## Version History
 
+- **2026-07-13T21:58:34Z** Started (planned → in-session).
 - **2026-07-10T06:00:55Z** Created (runlist child of dotmd-primary-consumer-hardening).

@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { resolveConfig } from '../src/config.mjs';
 import { runBulkTag, inferTypeFromPath } from '../src/bulk-tag.mjs';
 
+const BIN = path.resolve(import.meta.dirname, '..', 'bin', 'dotmd.mjs');
 let tmpDir;
 let stdoutChunks;
 let originalWrite;
@@ -155,6 +156,24 @@ describe('runBulkTag', () => {
     ok(aContent.includes('status: active'), 'plans/a.md status overridden');
     ok(bContent.includes('type: doc'), 'b.md type overridden to doc');
     ok(bContent.includes('status: active'), 'b.md status overridden');
+  });
+
+  it('CLI preserves command-local --type and --status after bulk-tag', () => {
+    const docsDir = setup();
+    mkdirSync(path.join(docsDir, 'plans'));
+    const filePath = path.join(docsDir, 'plans', 'cli.md');
+    writeFileSync(filePath, '# CLI\n');
+
+    const result = spawnSync('node', [BIN, 'bulk-tag', '--type', 'doc', '--status', 'active', 'docs/plans/cli.md'], {
+      cwd: tmpDir,
+      encoding: 'utf8',
+      env: { ...process.env, NO_COLOR: '1' },
+    });
+
+    strictEqual(result.status, 0, result.stderr);
+    const content = readFileSync(filePath, 'utf8');
+    ok(content.includes('type: doc'), 'post-command --type reaches bulk-tag');
+    ok(content.includes('status: active'), 'post-command --status reaches bulk-tag');
   });
 
   it('--json emits a structured candidate list', async () => {
