@@ -36,6 +36,7 @@ import { consumePrompt } from '../src/prompts.mjs';
 import { captureGitIndexGeneration, captureGitIndexPaths } from '../src/git.mjs';
 
 const modulePath = pathToFileURL(path.resolve(import.meta.dirname, '..', 'src', 'atomic-mutation.mjs')).href;
+const gitModulePath = pathToFileURL(path.resolve(import.meta.dirname, '..', 'src', 'git.mjs')).href;
 const bin = path.resolve(import.meta.dirname, '..', 'bin', 'dotmd.mjs');
 let tmpDir;
 const activeChildren = new Set();
@@ -616,10 +617,12 @@ describe('atomic mutation substrate', () => {
       writeFileSync(configPath, `export const root = 'docs';\n`);
       const validDoc = path.join(root, 'docs', 'doc.md');
       writeFileSync(validDoc, '# doc');
-      if (attack === 'symlink-parent') symlinkSync('/tmp', path.join(root, 'docs', 'escape'));
+      const escapeTarget = path.join(root, 'outside');
+      if (attack === 'symlink-parent' || attack === 'artifact-symlink') mkdirSync(escapeTarget);
+      if (attack === 'symlink-parent') symlinkSync(escapeTarget, path.join(root, 'docs', 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
       const directory = path.join(root, '.dotmd', 'transactions', `attack-${attack}`);
       mkdirSync(directory, { recursive: true });
-      if (attack === 'artifact-symlink') symlinkSync('/tmp', path.join(directory, 'escape'));
+      if (attack === 'artifact-symlink') symlinkSync(escapeTarget, path.join(directory, 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
       let participantPath = validDoc;
       if (attack === 'absolute') participantPath = '/tmp/dotmd-malicious.md';
       if (attack === 'dotdot') participantPath = path.resolve(root, 'docs', '..', 'outside.md');
@@ -659,10 +662,12 @@ describe('atomic mutation substrate', () => {
 
     const root = setup();
     mkdirSync(path.join(root, '.dotmd'));
-    symlinkSync('/tmp', path.join(root, '.dotmd', 'transactions'));
+    const escapeTarget = path.join(root, 'outside');
+    mkdirSync(escapeTarget);
+    symlinkSync(escapeTarget, path.join(root, '.dotmd', 'transactions'), process.platform === 'win32' ? 'junction' : 'dir');
     throws(() => recoverAbandonedTransactions(root), /symlink|unsafe/i);
     rmSync(path.join(root, '.dotmd', 'transactions'));
-    symlinkSync('/tmp', path.join(root, '.dotmd', 'locks'));
+    symlinkSync(escapeTarget, path.join(root, '.dotmd', 'locks'), process.platform === 'win32' ? 'junction' : 'dir');
     const file = path.join(root, 'doc.md');
     writeFileSync(file, 'x');
     throws(() => withPathLocks([file], { repoRoot: root }, () => {}), /symlink|unsafe/i);
@@ -1021,7 +1026,7 @@ describe('atomic mutation substrate', () => {
       const code = `
         import { writeFileSync } from 'node:fs';
         import { moveFileAtomic } from ${JSON.stringify(modulePath)};
-        import { captureGitIndexGeneration } from ${JSON.stringify(path.resolve(import.meta.dirname, '..', 'src', 'git.mjs'))};
+        import { captureGitIndexGeneration } from ${JSON.stringify(gitModulePath)};
         moveFileAtomic(process.argv[1], process.argv[2], 'new', {
           repoRoot: process.argv[3], operation: 'rename', gitMove: true,
           gitIndex: captureGitIndexGeneration(process.argv[3]),
@@ -1210,7 +1215,7 @@ describe('atomic mutation substrate', () => {
     const code = `
       import { writeFileSync } from 'node:fs';
       import { moveFileAtomic } from ${JSON.stringify(modulePath)};
-      import { captureGitIndexGeneration } from ${JSON.stringify(path.resolve(import.meta.dirname, '..', 'src', 'git.mjs'))};
+      import { captureGitIndexGeneration } from ${JSON.stringify(gitModulePath)};
       moveFileAtomic(process.argv[1], process.argv[2], 'new', { repoRoot: process.argv[3], operation: 'rename', gitMove: true,
         gitIndex: captureGitIndexGeneration(process.argv[3]), testHooks: { afterTransactionPhase: phase => {
           if (phase === 'git-index-prepared') { writeFileSync(process.argv[4], phase); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60_000); }
@@ -1244,7 +1249,7 @@ describe('atomic mutation substrate', () => {
     const code = `
       import { writeFileSync } from 'node:fs';
       import { moveFileAtomic } from ${JSON.stringify(modulePath)};
-      import { captureGitIndexGeneration } from ${JSON.stringify(path.resolve(import.meta.dirname, '..', 'src', 'git.mjs'))};
+      import { captureGitIndexGeneration } from ${JSON.stringify(gitModulePath)};
       moveFileAtomic(process.argv[1], process.argv[2], 'new', { repoRoot: process.argv[3], operation: 'rename', gitMove: true,
         gitIndex: captureGitIndexGeneration(process.argv[3]), testHooks: { afterTransactionPhase: phase => {
           if (phase === 'git-index-prepared') { writeFileSync(process.argv[4], phase); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60_000); }
@@ -1275,7 +1280,7 @@ describe('atomic mutation substrate', () => {
     const code = `
       import { writeFileSync } from 'node:fs';
       import { moveFileAtomic } from ${JSON.stringify(modulePath)};
-      import { captureGitIndexGeneration } from ${JSON.stringify(path.resolve(import.meta.dirname, '..', 'src', 'git.mjs'))};
+      import { captureGitIndexGeneration } from ${JSON.stringify(gitModulePath)};
       moveFileAtomic(process.argv[1], process.argv[2], 'new', { repoRoot: process.argv[3], operation: 'rename', gitMove: true,
         gitIndex: captureGitIndexGeneration(process.argv[3]), testHooks: { afterTransactionPhase: phase => {
           if (phase === 'git-index-prepared') { writeFileSync(process.argv[4], phase); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60_000); }

@@ -126,7 +126,10 @@ export function runUpdate(argv, _config, opts = {}) {
       continue;
     }
     process.stdout.write(dim(`$ ${s.cmd.join(' ')}\n`));
-    const r = spawnSync(executableName(s.cmd[0]), s.cmd.slice(1), { stdio: 'inherit' });
+    const r = spawnSync(executableName(s.cmd[0]), s.cmd.slice(1), {
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+    });
     ran = true;
     if (r.status !== 0) {
       failed = true;

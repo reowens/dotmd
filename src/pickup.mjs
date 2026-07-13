@@ -87,11 +87,13 @@ export function canonicalPlanIdentity(filePath, config) {
   const authorized = authorizeManagedSource(filePath, config, { kind: 'Ownership plan source' });
   const resolved = canonicalizePathEntrySpelling(realpathSync(authorized.path));
   const canonicalPath = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  const displayRoot = canonicalizePathEntrySpelling(authorized.root.lexicalPath);
   const managedDisplayPath = canonicalizePathEntrySpelling(authorized.path);
+  const displayRelative = path.relative(displayRoot, managedDisplayPath);
   return {
     canonicalPath,
     key: createHash('sha256').update(canonicalPath).digest('hex'),
-    repoPath: path.relative(config.repoRoot, managedDisplayPath).split(path.sep).join('/'),
+    repoPath: path.relative(config.repoRoot, path.join(authorized.root.lexicalPath, displayRelative)).split(path.sep).join('/'),
     managedPath: authorized.path,
   };
 }
