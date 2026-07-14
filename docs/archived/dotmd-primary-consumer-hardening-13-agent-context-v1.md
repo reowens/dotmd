@@ -3,17 +3,17 @@ type: plan
 status: archived
 created: 2026-07-10T06:00:55Z
 updated: 2026-07-13T18:35:04Z
-parent_plan: ../plans/dotmd-primary-consumer-hardening.md
+parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
+  - "> dotmd-primary-consumer-audit.md"
 current_state: Audit F10 confirmed hard-coded/mixed/duplicated agent buckets, silent truncation, missing dynamic status priming, and body-relative pickup-card offsets. This plan consumes the command-schema seam but owns machine and human agent-state semantics.
 next_step: Extract resolved status metadata into a shared module, then define and contract-test agent-context schema version 1 before changing HUD or presets.
 ---
 
 # Agent Context V1
 
-> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
 
 ## Problem
 

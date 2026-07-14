@@ -3,17 +3,17 @@ type: plan
 status: archived
 created: 2026-07-10T06:00:55Z
 updated: 2026-07-13T21:53:53Z
-parent_plan: ../plans/dotmd-primary-consumer-hardening.md
+parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
+  - "> dotmd-primary-consumer-audit.md"
 current_state: Audit F13 confirmed ordinary index builds can scan unbounded repository history and silently lose all Git-derived dates after maxBuffer failure. Mutation callers cannot distinguish complete history from degradation.
 next_step: Change the batch API to accept current managed paths and return explicit completeness/reason metadata before adding commit/output limits.
 ---
 
 # Bounded Git Metadata
 
-> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
 
 ## Problem
 

@@ -1,8 +1,8 @@
 ---
 type: doc
-status: review
+status: archived
 created: 2026-07-09T23:16:17Z
-updated: 2026-07-11T18:31:34Z
+updated: 2026-07-14T00:14:36Z
 modules:
   - cli
   - lifecycle
@@ -16,11 +16,13 @@ surfaces:
 domain: agent-ux
 audience: internal
 related_plans:
-  - "> plans/dotmd-primary-consumer-hardening.md"
+  - "> dotmd-primary-consumer-hardening.md"
 related_docs:
-  - "> agent-ux-audit.md"
-  - "> audit-beyond-platform.md"
+  - "> ../agent-ux-audit.md"
+  - "> ../audit-beyond-platform.md"
 dotmd_version: 0.69.0
+current_state: Findings F1-F14 have implementation or explicit de-scoping outcomes in the hardening runlist. F15 is the final graduate/remove experiment; this audit closes after that decision is recorded.
+next_step: After the MCP decision and child-plan closeouts, record the final finding disposition and archive this audit before archiving the hardening hub. Do not wait for or perform a release.
 ---
 
 # Dotmd Primary-Consumer Audit - Second Pass
@@ -34,6 +36,14 @@ dotmd is already unusually strong at agent-facing workflow design. Its breadth i
 The test suite is broad and green, but many findings below are behavior that existing tests either codify or do not exercise. The next phase should therefore prioritize invariant and adversarial tests over more feature surface.
 
 This audit supersedes the initial conversational findings from 2026-07-09. It does not supersede the historical audits linked below; those remain useful records of already-shipped work.
+
+## Closure Direction
+
+- Complete Documentation and Deck Hygiene and the MCP graduate/remove experiment without another planning pass.
+- Treat explicit rejected/deferred tails as final outcomes, not permanently open work.
+- Close Release Integrity from completed implementation and automated acceptance; retain live publication checks only as release procedure.
+- Archive this audit and the hardening hub after every child has a final disposition.
+- Do not schedule, require, or perform a release as part of this closure.
 
 ## Audit Boundary
 
@@ -243,9 +253,34 @@ Passing tests do not invalidate the findings: several defects are currently expl
 6. Notion, scale, portability, and documentation hygiene (F7, F13, F14).
 7. MCP experiment only after its prerequisites are satisfied (F15).
 
+## Final Disposition
+
+| Findings | Outcome |
+|---|---|
+| F1, F2, F12 | Centralized pickup classification, durable session ownership, and transactional baton/consume transitions shipped. |
+| F3, F4 | Managed containment and atomic, conflict-aware single/multi-file mutation shipped. |
+| F5 | Release preflight, durable recovery, staged-index isolation, atomic branch/tag publication, and local artifact verification shipped; live checks remain operational guidance. |
+| F6 | Guard input is bounded, redacted, fail-closed where required, and covered by adversarial privacy tests. |
+| F7 | The unsupported Notion surface and dependencies were removed. |
+| F8 | Command grammar and ownership are centralized in the command schema and consumed by validation/help/completion surfaces. |
+| F9 | Rename and machine-output paths use stable repository-relative identities. |
+| F10 | Agent-context v1 is bounded, versioned, type-aware, configuration-derived, and shared by passive machine surfaces. |
+| F11 | Dry-run and passive context paths suppress repository and observability writes; the MCP experiment independently confirmed byte-identical no-write behavior. |
+| F13 | Git metadata is bounded with explicit degradation, and CI now covers Ubuntu, macOS, and Windows. |
+| F14 | README was narrowed to onboarding/concepts, changelog continuity was restored with enforcement, and drained partial plans were archived. |
+| F15 | A project-local read-only MCP passed protocol/parity/no-write tests but reduced tool-call cost by 0%; it and its registration were removed. |
+
+## Closeout
+
+- All fifteen findings have implementation or explicit remove/reject outcomes.
+- Every executable child has direct verification recorded in its archived plan.
+- No finding remains blocked on a future release or another planning pass.
+- This audit is complete and can archive before the hardening hub closes.
+
 
 ## Version History
 
+- **2026-07-14T00:14:36Z** Archived — All F1-F15 findings now have implemented or explicit remove/reject outcomes; the audit is complete.
 - **2026-07-10** Fix-planning pass completed and cross-reviewed: audit findings mapped into the ordered `dotmd-primary-consumer-hardening` runlist with 15 executable child plans and explicit F1-F15 ownership.
 - **2026-07-09T23:27:20Z** Status: active → review — Second-pass findings source-verified, reproduced where safe, and ready for fix-planning review.
 - **2026-07-09** Second-pass audit completed: 15 findings grouped into six root-cause streams; first-pass overstatements narrowed; MCP deferred behind lifecycle, command-schema, and agent-context prerequisites.

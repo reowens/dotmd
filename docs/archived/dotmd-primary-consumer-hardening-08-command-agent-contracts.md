@@ -3,17 +3,17 @@ type: plan
 status: archived
 created: 2026-07-10T05:53:02Z
 updated: 2026-07-13T17:57:35Z
-parent_plan: ../plans/dotmd-primary-consumer-hardening.md
+parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
+  - "> dotmd-primary-consumer-audit.md"
 current_state: Audit F8 confirmed duplicated command metadata, silent roadmap grammar drift, and command-local flag ownership loss. Notion removal lands first so the schema inventories the intended command surface once; agent-context concerns live in their own downstream child.
 next_step: Inventory every dispatched command, alias, positional form, option, and arity into a declarative schema while preserving current execution handlers.
 ---
 
 # Command Schema Contracts
 
-> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
 
 ## Problem
 

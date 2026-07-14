@@ -3,17 +3,17 @@ type: plan
 status: archived
 created: 2026-07-10T06:00:55Z
 updated: 2026-07-13T23:24:02Z
-parent_plan: ../plans/dotmd-primary-consumer-hardening.md
+parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
+  - "> dotmd-primary-consumer-audit.md"
 current_state: Audit F13 confirmed Windows-sensitive root ownership and watch URL handling while CI runs only on Ubuntu. Runtime support and maintainer release support need separate explicit policies.
 next_step: Add macOS/Windows characterization lanes first, classify failures, then replace root-prefix logic with the managed containment primitive rather than adding another path helper.
 ---
 
 # Cross Platform Contract
 
-> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
 
 ## Problem
 

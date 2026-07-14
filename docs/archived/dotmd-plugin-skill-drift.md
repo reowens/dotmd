@@ -1,8 +1,8 @@
 ---
 type: plan
-status: partial
+status: archived
 created: 2026-06-29T05:42:30Z
-updated: 2026-06-29T10:14:58Z
+updated: 2026-07-14T00:10:11Z
 surfaces:
 modules:
 domain:
@@ -10,8 +10,8 @@ audience: internal
 parent_plan: dotmd-forward.md
 related_plans:
 related_docs:
-current_state: Roadmap Track 3 — a small, very on-identity win. dotmd is a drift- and staleness-catcher that doesn't yet catch drift in its own plugin surface. The SKILL.md and CLAUDE.md workflow guidance are two canonical surfaces kept in sync by hand (CLAUDE.md literally says "keep it in sync"), and the self-heal mechanism skips `.claude/skills/` — a decision made back when dotmd had no skill surface, which has since flipped.
-next_step: Phase 1 — a SKILL.md ⇄ CLAUDE.md drift guard surfaced through `dotmd check`/`doctor`. Decide the comparison unit (shared canonical block vs. semantic) before building.
+current_state: Phase 1 shipped the canonical workflow drift guard. Phase 2 was explicitly rejected as dead code because dotmd never scaffolds or banner-stamps repository skill files; the plan is complete to its decided scope.
+next_step: Add a final Closeout naming the shipped guard and rejected skill-sweep tail, then archive this plan during Documentation and Deck Hygiene. Do not add speculative self-heal behavior.
 ---
 
 # Dotmd Plugin / Skill Drift Guards
@@ -68,8 +68,16 @@ separate, genuinely-useful idea — warn when a hand-copied `.claude/skills/dotm
 shadows the plugin skill — is a different feature, risks false positives on
 intentional overrides, and isn't clearly needed; not built.)
 
+## Closeout
+
+- Outcomes: `dotmd check` and `dotmd doctor --project` enforce whitespace-tolerant equality of the marked canonical workflow block in `CLAUDE.md` and the plugin skill.
+- Scope safety: the check runs only when both source files and both markers exist, so consumer repositories do not receive false drift warnings.
+- Verification: 12 focused tests cover extraction, drift, missing surfaces, and the committed canonical pair.
+- Final decision: a `.claude/skills/` cleanup sweep is rejected because dotmd has never scaffolded or banner-stamped repository skill files. It is not deferred implementation work.
+
 ## Version History
 
+- **2026-07-14T00:10:11Z** Archived — Shipped canonical workflow drift detection and finalized repository skill sweeping as rejected dead code.
 - **2026-06-29T10:14:58Z** Status: in-session → partial — Phase 1 (SKILL.md ⇄ CLAUDE.md drift guard via marked block) shipped. Phase 2 (sweep .claude/skills/) deferred as premature — dotmd never scaffolds or banner-stamps skill files, so the sweep would be dead code; revisit only if skill-scaffolding ever lands.
 - **2026-06-29T10:06:09Z** Started (planned → in-session).
 - **2026-06-29T05:44:34Z** Status: active → planned.

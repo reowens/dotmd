@@ -3,17 +3,17 @@ type: plan
 status: archived
 created: 2026-07-10T05:53:02Z
 updated: 2026-07-11T18:31:58Z
-parent_plan: ../plans/dotmd-primary-consumer-hardening.md
+parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
+  - "> dotmd-primary-consumer-audit.md"
 current_state: Shipped a zero-dependency atomic mutation substrate with stale-snapshot rejection, ordered bounded locks, exclusive publication, CAS-safe rollback, transactional lifecycle moves, and in-lock index rendering.
 next_step: Lifecycle Ownership can now build authoritative pickup and session ownership on top of conflict-safe single-file and multi-file mutation primitives.
 ---
 
 # Atomic Mutation
 
-> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
 
 ## Problem
 

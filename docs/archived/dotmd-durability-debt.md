@@ -7,7 +7,7 @@ surfaces:
 modules:
 domain:
 audience: internal
-parent_plan: ../plans/dotmd-forward.md
+parent_plan: dotmd-forward.md
 related_plans:
 related_docs:
 current_state: Roadmap Track 1. A forward-planning audit (3 parallel researchers, 2026-06-29) found correctness/durability debt that bites silently — no user files a ticket, they just get wrong behavior. Two classes — CRLF/Windows blindness and untested mutation modules. This is the one track that should jump dotmd's usual "wait for a real ask" queue because it's risk, not enhancement.

@@ -7,7 +7,7 @@ surfaces:
 modules:
 domain:
 audience: internal
-parent_plan: ../plans/dotmd-forward.md
+parent_plan: dotmd-forward.md
 related_plans:
 related_docs:
 current_state: Tier-3 roadmap primitive (`execution_mode: roadmap`) — composes runlists and rolls their done/total up into a recursive grand total, with `dotmd roadmap`/`roadmaps`/`roadmap next` + plans/briefing/health integration + a `check` nudge. BUILT, tested (1290), and dogfooded (dotmd-forward + beyond/platform master-runlist 100/333). Axis is domain composition; horizon grouping deferred by design. Built but UNRELEASED by user choice.

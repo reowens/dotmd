@@ -7,7 +7,7 @@ surfaces:
 modules:
 domain:
 audience: internal
-parent_plan: ../plans/dotmd-forward.md
+parent_plan: dotmd-forward.md
 related_plans:
 related_docs:
 current_state: Baton-on-exit is the only step of dotmd's core loop with no mechanical backstop — it rides entirely on agent memory, which is exactly the failure class dotmd exists to eliminate. Found by dogfooding: an author-session shipped+released Track 3, then narrated the next pickup into chat instead of running `dotmd baton` (the anti-pattern SKILL.md explicitly forbids). The plugin's hooks are all start-side (SessionStart/SubagentStart/CwdChanged → hud) or guard-side (PreToolUse → guard); there is no Stop/SessionEnd hook, and the lone baton reminder is SessionStart-only and gated on an in-session plan owned at session start.

@@ -3,17 +3,17 @@ type: plan
 status: archived
 created: 2026-07-10T06:00:55Z
 updated: 2026-07-12T21:29:22Z
-parent_plan: ../plans/dotmd-primary-consumer-hardening.md
+parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
+  - "> dotmd-primary-consumer-audit.md"
 current_state: Shipped. HTML export now allocates deterministic path-safe identities from the full corpus, rewrites emitted document links, and validates output ancestry before publication; DOT preserves full path IDs and tuple-safe edge identity.
 next_step: None. Follow-up work, if needed, belongs in a separate persistent export-manifest or broader Markdown-renderer plan.
 ---
 
 # Path Identity Outputs
 
-> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
 
 ## Problem
 

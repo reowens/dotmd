@@ -1,14 +1,14 @@
 ---
 type: plan
-status: awaiting
+status: archived
 created: 2026-07-10T05:53:02Z
-updated: 2026-07-10T10:03:31Z
+updated: 2026-07-14T00:14:09Z
 parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
-current_state: Implementation complete. Release preflight, staged-index isolation, durable intent/recovery, atomic branch-plus-tag push, failed-workflow rerun, npm-owned global synchronization, and canonical plugin verification are covered by adversarial tests; only live remote dogfood remains.
-next_step: At the next user-authorized release, run the canonical npm version command and complete the live GitHub/npm/global CLI/plugin checklist. No additional code is expected unless that dogfood exposes a failure.
+  - "> dotmd-primary-consumer-audit.md"
+current_state: Implementation complete. Release preflight, staged-index isolation, durable intent/recovery, atomic branch-plus-tag push, failed-workflow rerun, npm-owned global synchronization, and canonical plugin verification are covered by adversarial tests. Live publication checks are release procedure, not unfinished plan work.
+next_step: Add the final Closeout and archive this plan before any future release. Keep the GitHub/npm/global CLI/plugin checks in release procedure documentation without using publication as a plan gate.
 ---
 
 # Release Integrity
@@ -25,6 +25,7 @@ The documented one-command release can fail after creating a local tag, and comp
 - `npm run release:resume` is the recovery authority: it rolls back incomplete pre-tag attempts or resumes the exact durable target; once a tag exists, never bump again.
 - Every PATH-visible global `dotmd` copy must report the target version before local release success.
 - A release command never resets or unstages caller state; unexpected staged files cause refusal.
+- Live publication verification remains mandatory when a release occurs, but it does not keep implementation work or this plan open.
 
 ## Phases
 
@@ -54,11 +55,20 @@ The documented one-command release can fail after creating a local tag, and comp
 - Missing/malformed plugin manifests abort before either manifest write and before commit/tag creation.
 - Homebrew and NVM fixtures both update to the target version.
 
-## Dogfood Release Checklist
+## Operational Release Checklist (Non-Blocking)
+
+These checks remain part of release operations. They are not acceptance gates for closing this implementation plan.
 
 - Published npm version and GitHub Release target the same tag SHA.
 - Plugin refresh is verified or reported as the sole incomplete local step.
 - Every PATH-visible CLI agrees with the published version.
+
+## Closure Decision
+
+- Release-integrity implementation and adversarial acceptance are complete.
+- No additional code is expected before closeout.
+- Archive this plan from the evidence above; do not schedule or perform a release to manufacture plan closure.
+- Preserve the live checklist as operational guidance for whenever a future release is independently authorized.
 
 ## Verification
 
@@ -69,9 +79,17 @@ The documented one-command release can fail after creating a local tag, and comp
 - Focused release suite: 56/56 passing.
 - Full suite: 1,339/1,339 passing; `dotmd check --verbose`, syntax checks, and `git diff --check` clean.
 
+## Closeout
+
+- Outcomes: release preflight rejects unsafe branch, worktree, staged-index, tag, manifest, and remote states before publication can begin.
+- Recovery: durable intent preserves the exact target across failures, resumes branch-plus-tag publication atomically, and never creates a second version bump after a tag exists.
+- Local completion: every PATH-visible CLI and the Claude Code plugin must match the target before release automation reports success.
+- Closure basis: implementation and adversarial automated acceptance are complete. Live publication checks remain mandatory operational procedure but are not unfinished engineering or a reason to keep this plan open.
+
 
 ## Version History
 
+- **2026-07-14T00:14:09Z** Archived — Implementation and adversarial acceptance are complete; live publication checks remain operational procedure rather than an open-plan gate.
 - **2026-07-10T10:03:31Z** Status: in-session → awaiting — Implementation and adversarial verification complete (1,339 tests); awaiting the next user-authorized publication to dogfood the live GitHub/npm/global CLI/plugin path.
 - **2026-07-10T06:04:24Z** Started (active → in-session).
 - **2026-07-10T05:56:24Z** Status: planned → active — Release recovery shipped and dogfooded in v0.69.0; retain the worktree hardening and close staged-index safety next.

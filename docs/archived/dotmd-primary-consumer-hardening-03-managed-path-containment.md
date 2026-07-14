@@ -3,17 +3,17 @@ type: plan
 status: archived
 created: 2026-07-10T05:53:02Z
 updated: 2026-07-10T21:09:02Z
-parent_plan: ../plans/dotmd-primary-consumer-hardening.md
+parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
+  - "> dotmd-primary-consumer-audit.md"
 current_state: Audit F3 reproduced a managed mutation changing an absolute Markdown path outside both the repository and configured document roots. Existing resolution helpers establish existence but not authorization.
 next_step: Specify canonical source/destination containment semantics, including symlink and nonexistent-destination cases, before changing any resolver used by read-only commands.
 ---
 
 # Managed Path Containment
 
-> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
 
 ## Problem
 

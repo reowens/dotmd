@@ -3,17 +3,17 @@ type: plan
 status: archived
 created: 2026-07-10T05:53:02Z
 updated: 2026-07-10T11:45:11Z
-parent_plan: ../plans/dotmd-primary-consumer-hardening.md
+parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
+  - "> dotmd-primary-consumer-audit.md"
 current_state: Audit F6 confirmed the global guard acts in non-dotmd repositories, broad Git commands bypass prompt protection, and global logs retain unredacted bodies/commands. Redaction must land before broader guard inspection increases captured data.
 next_step: Specify the retained telemetry schema and legacy-log policy, then implement one sanitizer shared by command, error, and misuse logging.
 ---
 
 # Guard Privacy
 
-> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
 
 ## Problem
 

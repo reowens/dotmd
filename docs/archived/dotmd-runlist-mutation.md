@@ -1,8 +1,8 @@
 ---
 type: plan
-status: partial
+status: archived
 created: 2026-06-29T05:42:30Z
-updated: 2026-06-29T08:47:49Z
+updated: 2026-07-14T00:10:08Z
 surfaces:
 modules:
 domain:
@@ -10,8 +10,8 @@ audience: internal
 parent_plan: dotmd-forward.md
 related_plans:
 related_docs:
-current_state: Roadmap Track 2 — the live feature frontier. Runlists/coordination has been the dominant recent investment (0.39→0.64) but the structure is read/walk-only — adding or reordering children means hand-editing the `runlist:` array, which directly contradicts dotmd's own "never hand-edit frontmatter" ethos. This track makes runlists a first-class managed structure. Several sub-items were flagged across three prior closeouts.
-next_step: Phase 1 — `runlist add <hub> <child...>`. Append to the hub's `runlist:`/ranked-queue, set each child's `parent_plan` back-ref, and scaffold a stub if the child doesn't exist yet.
+current_state: Phases 1-4 shipped. Phase 5 auto-rollup was explicitly rejected as premature and is not remaining work; the plan is complete to its decided scope.
+next_step: Add a final Closeout naming the shipped phases and rejected auto-rollup tail, then archive this plan during Documentation and Deck Hygiene. Do not implement more runlist behavior.
 ---
 
 # Dotmd Runlist Mutation
@@ -79,8 +79,16 @@ Not built. After Phases 1–4, manual hub-status upkeep isn't visibly annoying �
 archive." Silently archiving a hub from its children is surprising automation;
 keep the explicit nudge. Revisit only if the manual step proves a real friction.
 
+## Closeout
+
+- Outcomes: `runlist add`, `remove`, and `reorder` ship with existing-plan attachment, child back-reference management, stub scaffolding, order-list synchronization, dry-run, and JSON support.
+- Presentation: runlists remain outside leaf-plan counts, preserve explicit status filters, and retain a discoverability footer when filters hide hubs.
+- Verification: 25 focused tests shipped with the mutation verbs, and the feature has remained covered by the full suite through the primary-consumer hardening work.
+- Final decision: automatic hub status rollup is rejected as surprising automation without demonstrated friction. It is not deferred implementation work.
+
 ## Version History
 
+- **2026-07-14T00:10:08Z** Archived — Shipped runlist mutation and finalized auto-rollup as rejected, not deferred work.
 - **2026-06-29T08:47:49Z** Status: in-session → partial — Phases 1-4 shipped (add/remove/reorder + body order-list sync, existing-plan refs, Runlists --status discoverability footer, fold-in-runlist-order, runlists held out of headline plan counts). Phase 5 (hub status auto-rollup) deferred as premature automation — revisit only if manual hub-status upkeep proves a real friction.
 - **2026-06-29** Follow-up from review: hold runlists OUT of the headline plan count everywhere. `dotmd plans` and `dotmd briefing` now count leaf plans only and show runlists as a separate sibling/pointer (was: hubs summed into "N plans"), matching `dotmd health`'s held-out model. Touched `src/render.mjs` + `src/query.mjs`; updated the 2 affected count assertions.
 - **2026-06-29** Shipped Phases 1–4 (Phase 3 folded into `add`; Phase 5 deferred). New `runlist add|remove|reorder` verbs in `src/runlist.mjs` with body `## Order of operations` sync; `--status` Runlists discoverability footer in `src/query.mjs`; fold renders children in runlist order; help + CLAUDE.md + SKILL.md synced; +25 tests (test suite 1230 → 1255).

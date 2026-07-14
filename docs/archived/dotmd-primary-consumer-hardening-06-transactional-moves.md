@@ -3,17 +3,17 @@ type: plan
 status: archived
 created: 2026-07-10T05:53:02Z
 updated: 2026-07-12T10:07:26Z
-parent_plan: ../plans/dotmd-primary-consumer-hardening.md
+parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
+  - "> dotmd-primary-consumer-audit.md"
 current_state: Shipped durable multi-file transactions, crash recovery, canonical reference planning, Git-index CAS, and truthful mutation result contracts.
 next_step: Continue the parent runlist with Path Identity Outputs.
 ---
 
 # Transactional Moves
 
-> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
 
 ## Problem
 

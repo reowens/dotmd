@@ -1,22 +1,22 @@
 ---
 type: plan
-status: partial
+status: archived
 created: 2026-06-29T05:44:40Z
-updated: 2026-06-30T01:46:24Z
+updated: 2026-07-14T00:10:13Z
 surfaces:
 modules:
 domain:
 audience: internal
 parent_plan:
 related_plans:
-  - "> ../archived/dotmd-durability-debt.md"
+  - "> dotmd-durability-debt.md"
   - "> dotmd-runlist-mutation.md"
   - "> dotmd-plugin-skill-drift.md"
-  - "> ../archived/dotmd-roadmap-layer.md"
-  - "> ../archived/dotmd-baton-exit-nudge.md"
+  - "> dotmd-roadmap-layer.md"
+  - "> dotmd-baton-exit-nudge.md"
 related_docs:
 current_state: Coordination hub for dotmd's forward roadmap, derived from a 3-researcher forward audit on 2026-06-29 (trajectory/parked-ideas, feature-surface maturity, rough-edges/tensions). The core is mature and the deck is otherwise drained; the path forward is to harden where it silently breaks, finish the one half-built feature (runlists), and dogfood drift-detection on dotmd's own plugin — not to add speculative features.
-next_step: Drained. Track 5 (dotmd-baton-exit-nudge) shipped in 0.68.0 + archived — the CLI baton-on-exit nudge + canonical-block close-out rule, closing the last unguarded core-loop step. All five tracks are now shipped to the extent they will be; the only remainders are two quiet deferred tails (Track 2 runlist-mutation, Track 3 skill-drift Phase 2 — deferred as premature/dead-code). Hub wound down to partial. Reopen only if a new forward theme appears.
+next_step: Add the final roadmap Closeout and archive this hub after Runlist Mutation and Plugin / Skill Drift are archived. Their rejected tails do not justify leaving this roadmap partial.
 execution_mode: roadmap
 ---
 
@@ -46,11 +46,11 @@ graph pick it up. -->
 
 | # | Plan | Why / gating | Status |
 |---|------|--------------|--------|
-| 1 | [Durability & correctness debt](../archived/dotmd-durability-debt.md) | Silent-failure classes (CRLF/Windows blindness, untested frontmatter-mutating modules). The one track that jumps the "wait for an ask" queue — it's risk, not enhancement. No gating. | archived |
+| 1 | [Durability & correctness debt](dotmd-durability-debt.md) | Silent-failure classes (CRLF/Windows blindness, untested frontmatter-mutating modules). The one track that jumps the "wait for an ask" queue — it's risk, not enhancement. No gating. | archived |
 | 2 | [Runlist mutation](dotmd-runlist-mutation.md) | The live feature frontier: runlists are read-only, so adding/reordering children means hand-editing the array — contradicts dotmd's own ethos. Where the energy already is. | partial |
 | 3 | [Plugin / skill drift guards](dotmd-plugin-skill-drift.md) | Cheap, maximally on-identity: make dotmd catch drift in its own SKILL.md ⇄ CLAUDE.md. **Shipped Phase 1** (the drift guard); Phase 2 (sweep `.claude/skills/`) deferred as premature — dotmd never scaffolds skill files, so the sweep would be dead code. | partial |
-| 4 | [Roadmap layer](../archived/dotmd-roadmap-layer.md) | The tier *above* runlists — recursive `done/total` rollup over child runlists. **Shipped 0.67.0**: axis-corrected to domain composition (horizon grouping deferred); dogfooded on this hub + beyond/platform's master-runlist (100/333). | archived |
-| 5 | [Baton exit nudge](../archived/dotmd-baton-exit-nudge.md) | Dogfood-proven "harden where it silently breaks": baton-on-exit was the only core-loop step with no mechanical backstop. **Shipped 0.68.0**: CLI nudge on baton-less in-session release + positive close-out rule in the canonical block. Phase 3 (Stop/SessionEnd hook) deferred by design. | archived |
+| 4 | [Roadmap layer](dotmd-roadmap-layer.md) | The tier *above* runlists — recursive `done/total` rollup over child runlists. **Shipped 0.67.0**: axis-corrected to domain composition (horizon grouping deferred); dogfooded on this hub + beyond/platform's master-runlist (100/333). | archived |
+| 5 | [Baton exit nudge](dotmd-baton-exit-nudge.md) | Dogfood-proven "harden where it silently breaks": baton-on-exit was the only core-loop step with no mechanical backstop. **Shipped 0.68.0**: CLI nudge on baton-less in-session release + positive close-out rule in the canonical block. Phase 3 (Stop/SessionEnd hook) deferred by design. | archived |
 
 ## Deliberately dormant (saw them, parked them)
 
@@ -68,8 +68,16 @@ Pull any of these only on a real ask — listing so they're not silently lost:
   pressure, not urgent.
 - **Notion is the only integration** — no Obsidian/Confluence/etc.
 
+## Closeout
+
+- Outcomes: all five roadmap tracks shipped to their decided scope: durability hardening, runlist mutation, canonical workflow drift detection, roadmap composition, and baton-exit protection.
+- Final decisions: runlist hub auto-rollup and repository skill sweeping were rejected as premature or dead-code automation; their decisions are complete rather than open tails.
+- Direction: speculative AI, analytics, deprecation, dispatcher-split, and integration ideas remain dormant until concrete demand appears and are not successors to this roadmap.
+- Closure: the roadmap is drained after its two partial child plans archive and requires no release or replacement roadmap.
+
 ## Version History
 
+- **2026-07-14T00:10:13Z** Archived — All roadmap tracks reached their decided scope; rejected tails are final and the roadmap is drained.
 - **2026-06-30T01:46:24Z** Status: active → partial — Wound down: all 5 tracks shipped to the extent they will be (Track 5 baton-exit-nudge → 0.68.0). Only quiet deferred tails remain (Track 2 runlist-mutation, Track 3 skill-drift Phase 2).
 - **2026-06-29** Track 4 (roadmap-layer) shipped in **0.67.0** + archived — the full tier-3 roadmap primitive (coordination-hub rollup, `execution_mode: roadmap` + recursive `buildRoadmapIndex`, `dotmd roadmap`/`roadmaps`/`roadmap next`, plans/briefing/health integration, `--roadmap` scaffold, `check` nudge). Forward roadmap now drained except Track 5 (baton-exit-nudge, planned).
 - **2026-06-29** Migrated `execution_mode: coordination` → `roadmap` — dogfooding Track 4's shipped tier-3 primitive. This hub IS dotmd's forward roadmap; it now renders in the `Roadmaps` tier (`dotmd roadmap`) with a rolled-up `done/total` over its tracks (1/5: durability-debt archived; the rest live), instead of as a flat coordination hub. (Its children are plans, not runlists — a valid roadmap-over-plans; the recursive rollup shines when children are themselves runlists, as on beyond/platform's master-runlist.)

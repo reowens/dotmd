@@ -3,17 +3,17 @@ type: plan
 status: archived
 created: 2026-07-10T06:00:55Z
 updated: 2026-07-10T20:23:28Z
-parent_plan: ../plans/dotmd-primary-consumer-hardening.md
+parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
+  - "> dotmd-primary-consumer-audit.md"
 current_state: Audit F7 confirmed the advertised Notion import/export/sync paths are incompatible with the declared SDK and have no API-contract coverage. Repair would require identity, serialization, conflict, partial-failure, and live-workspace decisions beyond this hardening cycle.
 next_step: Remove the unsupported command and dependencies before command-schema inventory, then document a concrete restoration gate rather than leaving dead implementation hidden.
 ---
 
 # Notion Removal
 
-> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
 
 ## Problem
 

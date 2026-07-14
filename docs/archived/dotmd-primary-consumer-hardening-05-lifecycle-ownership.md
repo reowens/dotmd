@@ -3,17 +3,17 @@ type: plan
 status: archived
 created: 2026-07-10T05:53:02Z
 updated: 2026-07-11T22:33:30Z
-parent_plan: ../plans/dotmd-primary-consumer-hardening.md
+parent_plan: dotmd-primary-consumer-hardening.md
 related_plans:
 related_docs:
-  - "> ../dotmd-primary-consumer-audit.md"
+  - "> dotmd-primary-consumer-audit.md"
 current_state: Shipped centralized pickup classification, canonical schema-v2 session ownership, atomic claim/release/baton transitions, and durable operation-bound index/hook completion independent of journals.
 next_step: Transactional Moves can now carry ownership through rename/archive recovery and finish the multi-file reference and crash-recovery boundary.
 ---
 
 # Lifecycle Ownership
 
-> Runlist child of [Dotmd Primary Consumer Hardening](../plans/dotmd-primary-consumer-hardening.md).
+> Runlist child of [Dotmd Primary Consumer Hardening](dotmd-primary-consumer-hardening.md).
 
 ## Problem
 
