@@ -6,7 +6,7 @@
 
 | Doc | Status |
 |-----|--------|
-| [Rename To Runlist](plans/rename-to-runlist.md) | Active |
+| [dotmd → runlist](plans/rename-to-runlist.md) | Active |
 
 ## Reference
 
