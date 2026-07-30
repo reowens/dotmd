@@ -49,6 +49,8 @@ The state directory itself is the easy half: it is gitignored, so no user's repo
 
 ## Open
 
+> Filed as `runlist-rename.md`, not `rename-to-runlist.md`: a `*-runlist` slug is dotmd's fallback signal for a coordination hub, so the old name made this leaf pointer read as a navigation map and dropped it out of the live-plan count. Don't rename it back.
+
 - [ ] Owner answers the two questions above.
 - [ ] Rename inside this repo — package, bin, config filenames, env vars, completions, plugin surface.
 - [ ] State migration, per the scope pass in the platform plan.
