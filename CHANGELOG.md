@@ -2,6 +2,12 @@
 
 All notable changes to `dotmd-cli` are documented here. Older releases predate this file — see git tags and the GitHub Releases page for their notes.
 
+## Unreleased
+
+### Fixed
+
+- **Per-phase file manifests and status records were counted as independent phases.** `walkSections` now carries the nearest H2 ancestor explicitly, and phase-shaped H3 rows below an H2 beginning `Files` are excluded from validation, summaries, and active-phase selection. The commentary filter also recognizes a small set of corpus-proven compound report shapes while deliberately retaining ambiguous bare words such as `status`, `audit`, `design`, `plan`, `pre-plan`, and `gap-check`. Against the full downstream plan corpus this removes 113 manifest copies and seven commentary records, with every changed active-phase identity attributable to a manifest row; genuine near-collisions remain visible.
+
 ## 0.76.2 — 2026-08-24
 
 ### Fixed
