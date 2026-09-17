@@ -8,6 +8,13 @@ All notable changes to `dotmd-cli` are documented here. Older releases predate t
 
 - **`runlist baton <plan>` no longer flips the status of a plan that is not in-session.** Baton's release is a claim release, but it applied to any plan it was handed: a prompt-refresh pass named a plan slug to re-save its handoff and silently got `awaiting-testing` → `active`, which it then had to notice and undo by hand. When the named plan is neither `in-session` nor owned by this session, baton now saves the prompt — still stamped with its `plan:` link, so the handoff loop still closes itself — and leaves the status alone, saying so. `--status` still states a transition deliberately, and a plan that is in-session or owned here releases exactly as before.
 
+- **Commands are several times faster in large repos.** In a repo of about 4,900 documents and 31,000 commits, `runlist prompts` took 12 seconds, `briefing` / `plans` / `health` / `stale` / `modules` about 12, and `check` 28. Three causes, all in the shared index build:
+  - The git-staleness check asked `git rev-list` for history matching every document path at once. Git matches each pathspec against each commit, so the walk cost 14 seconds where the same walk against the one configured root costs 0.25. Revision selection now uses the root pathspecs when the caller supplies them; the per-document dates, commits and warnings are unchanged (verified identical on that corpus), and a path whose latest commit falls outside the bounded window still reports "Git metadata is incomplete" rather than a stale date.
+  - `Did you mean...` suggestions for unresolved references rebuilt the whole candidate list for every broken reference and then ran an exact edit distance against every basename and path in the index — about 360,000 full matrices per run. The list is now built once per field type, and the distance walk stops as soon as it passes the 3-edit limit the suggester cares about. Suggestions are byte-identical (9.9s → 0.27s).
+  - `runlist prompts` built the full validating index, which reads every body in the repo, and then scanned the tree a second time to order the queue. It shares one frontmatter-only index instead, like `hud`.
+
+  Net on that repo: `prompts` 1.4s, `briefing` 2.8s, `health` 2.8s, `check` 4.4s.
+
 ## 0.80.0 — 2026-09-16
 
 ### Fixed
