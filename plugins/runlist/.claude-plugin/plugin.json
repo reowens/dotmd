@@ -1,5 +1,5 @@
 {
-  "name": "dotmd",
+  "name": "runlist",
   "version": "0.89.2",
   "description": "Primes sessions and subagents with the runlist workflow and guards common mistakes. Requires `runlist` on PATH (npm i -g runlist).",
   "author": {
@@ -7,11 +7,11 @@
     "email": "robowens@me.com"
   },
   "hooks": "./hooks.json",
-  "homepage": "https://github.com/reowens/dotmd#readme",
-  "repository": "https://github.com/reowens/dotmd",
+  "homepage": "https://github.com/reowens/runlist#readme",
+  "repository": "https://github.com/reowens/runlist",
   "license": "MIT",
   "keywords": [
-    "dotmd",
+    "runlist",
     "markdown",
     "frontmatter",
     "plans",
